@@ -12,7 +12,7 @@ public class CacheLinePadding2 {
     }
 
 
-    @sun.misc.Contended //自动缓存行填充 需要加JVM参数才可用 -XX:
+    @sun.misc.Contended //自动缓存行填充 需要加JVM参数才可用
     private static class T extends Padding {
         public volatile long x = 0L;
     }

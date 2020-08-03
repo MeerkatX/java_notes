@@ -1,7 +1,6 @@
 package Future;
 
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.FutureTask;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -11,9 +10,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class ThreadCreation {
 
-    public static void main(String[] args) throws InterruptedException {
-
-        AtomicInteger atomicInteger = new AtomicInteger(1);
+    public static void main(String[] args) throws InterruptedException, ExecutionException {
 
         /*
         开线程只有 new Thread()一种方式，可以通过继承Thread，
@@ -33,6 +30,31 @@ public class ThreadCreation {
         } catch (ExecutionException e) {
             e.printStackTrace();
         }
+
+        thread1.interrupt();//进行线程中断，因为属于自旋
+
+        /////////////////////////线程池异步获取结果FutureTask//////////////////////////
+
+        ThreadPoolExecutor executor =
+                new ThreadPoolExecutor(2, 4, 60,
+                        TimeUnit.MINUTES, new LinkedBlockingDeque<>());
+        FutureTask<String> futureTask = new FutureTask(new Callable() {
+            @Override
+            public String call() throws Exception {
+                return "hello";
+            }
+        });
+//        new Thread(futureTask).start();
+        executor.execute(futureTask);
+        System.out.println(futureTask.get());
+
+
+        Future<String> result = executor.submit(()->"future");//扔进去一个callable
+        System.out.println(result.get());
+
+        executor.shutdownNow();
+
+        //////////////////////////////////////////////////
 
 
 

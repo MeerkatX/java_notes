@@ -9,9 +9,9 @@ public class RunnableDemo implements Runnable {
 
     @Override
     public void run() {
-        for (; ; ) {
+        while (! Thread.currentThread().isInterrupted()) {
             try {
-                System.out.println("runnable");
+                System.out.println("running");
                 Thread.sleep(1000);
                 /*
                 sleep() 可能会抛出 InterruptedException。因为异常不能跨线程传播回 main() 中，
@@ -19,6 +19,8 @@ public class RunnableDemo implements Runnable {
                  */
             } catch (InterruptedException e) {
                 e.printStackTrace();
+                System.out.println(Thread.currentThread().isInterrupted());//sleep方法会在抛出中断异常前重置中断标志位
+                break;
             }
         }
     }

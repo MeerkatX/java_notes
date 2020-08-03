@@ -1534,6 +1534,28 @@ public class DelayQueue<E extends Delayed> extends AbstractQueue<E>
 }
 ```
 
+## 中断
+
+中断是线程的一个标志位属性
+
+需要注意的是 Thread.sleep，join，wait，condition.await 等可中断阻塞方法**抛出异常之前，虚拟机会先将该线程的中断表示为清除**。
+
+```java
+@Override
+public void run() {
+    while (! Thread.currentThread().isInterrupted()) {
+        try {
+            System.out.println("running");
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();//sleep方法会在抛出中断异常前重置中断标志位，所以下面为false
+            System.out.println(Thread.currentThread().isInterrupted());
+            break;//如果不break仍旧循环。
+        }
+    }
+}
+```
+
 ## volatile
 
 >64位写入原子性 （Half write）

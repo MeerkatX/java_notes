@@ -21,15 +21,17 @@ public class Byte2IntegerDecoderTester {
             @Override
             protected void initChannel(Channel ch) throws Exception {
                 ch.pipeline().addLast(new ByteToMessageDecoder() {
+                    //模板方法，父类即ByteToMessageDecoder会调用，并且将list中内容一个一个传递给下一个Handler
                     @Override
                     protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
-                        while(in.readableBytes()>=4){
+                        while (in.readableBytes() >= 4) {
                             int i = in.readInt();
                             out.add(i);
                         }
                     }
                 });
-                ch.pipeline().addLast(new SimpleChannelInboundHandler(){
+
+                ch.pipeline().addLast(new SimpleChannelInboundHandler() {
 
                     @Override
                     protected void channelRead0(ChannelHandlerContext ctx, Object msg) throws Exception {
@@ -39,8 +41,9 @@ public class Byte2IntegerDecoderTester {
                 });
             }
         };
+        //利用EmbeddedChannel来进行测试
         EmbeddedChannel channel = new EmbeddedChannel(ci);
-        for(int i=0;i<100;i++){
+        for (int i = 0; i < 100; i++) {
             ByteBuf byteBuf = Unpooled.buffer();
             byteBuf.writeInt(i);
             channel.writeInbound(byteBuf);

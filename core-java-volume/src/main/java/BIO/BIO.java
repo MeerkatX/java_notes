@@ -20,7 +20,7 @@ public class BIO {
     public static void main(String[] args) throws IOException {
         /*
         byte[] read = new byte[1024];
-        InputStream in = new FileInputStream("D:\\ALLprojects\\Java_projects\\java-learn\\core-java-volume\\src\\main\\java\\BIO\\in.txt");
+        InputStream in = new FileInputStream("D:\\ALLprojects\\Java_projects\\java_notes\\core-java-volume\\src\\main\\java\\BIO\\in.txt");
         while (in.read(read)!=-1){
             String str = new String(read, StandardCharsets.UTF_8);
             System.out.println(str);
