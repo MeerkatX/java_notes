@@ -1,4 +1,4 @@
-# java-learn
+# java_notes
 
 一个菜鸡的学习记录
 
