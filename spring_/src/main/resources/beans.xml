@@ -1,0 +1,16 @@
+<!--<?xml version="1.0" encoding="UTF-8"?>-->
+<!--<beans xmlns="http://www.springframework.org/schema/beans"-->
+       <!--xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"-->
+       <!--xmlns:c="http://www.springframework.org/schema/c"-->
+       <!--xmlns:p="http://www.springframework.org/schema/p"-->
+       <!--xsi:schemaLocation="http://www.springframework.org/schema/beans-->
+        <!--https://www.springframework.org/schema/beans/spring-beans.xsd">-->
+
+    <!--&lt;!&ndash;默认singleton单例、prototype原型模式&ndash;&gt;-->
+    <!--&lt;!&ndash;autowire="byName" set方法参数名   autowire="byType" set方法bean的class 即类型&ndash;&gt;-->
+    <!--<bean id="user" class="ioc.pojo.User" p:age="1" scope="singleton" autowire="byType">-->
+        <!--<property name="name" value="xxx"/>-->
+        <!--&lt;!&ndash;<property name="age" value="1"/>&ndash;&gt;-->
+    <!--</bean>-->
+
+<!--</beans>-->

@@ -1,0 +1,11 @@
+# 配置tomcat端口号
+server:
+  port: 80
+
+# spring boot spring-boot-autoconfigure spring.factories
+# RedisAutoConfiguration
+spring:
+  redis:
+    host: 127.0.0.1
+    port: 6379
+#spring.redis.lettuce.pool.max-active=8
