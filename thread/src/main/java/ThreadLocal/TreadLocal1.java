@@ -16,7 +16,17 @@ public class TreadLocal1 {
     内存泄漏
      */
 
-    static ThreadLocal<Person> tl = new ThreadLocal<>();//只在本线程存在
+    static ThreadLocal<Person> tl = new ThreadLocal<>();//只在本线程存在,每个线程内部有一个ThreadLocalMap
+    //以t1为键，值为set的值 map.set(this, value); this即t1自身
+    //发生冲突，map采用再哈希法（开放地址法）：
+    //     for (Entry e = tab[i];
+    //      e != null;
+    //      e = tab[i = nextIndex(i, len)]) {   ...   }
+
+    //      具体nextIndex如下：
+    //        private static int nextIndex(int i, int len) {
+    //            return ((i + 1 < len) ? i + 1 : 0);
+    //        }
 
     public static void main(String[] args) {
         new Thread(() -> {
@@ -35,6 +45,8 @@ public class TreadLocal1 {
                 e.printStackTrace();
             }
             tl.set(new Person());//set只在本线程 Entry WeakReference
+            Person person = tl.get();
+            System.out.println(person.age+"  "+person.name);
         }).start();
     }
 

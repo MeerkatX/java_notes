@@ -340,6 +340,7 @@ public interface Future<V> {
     public V get() throws InterruptedException, ExecutionException {
         await();//阻塞等待目标是否完成
         /*
+        await()方法核心代码：
         while (!isDone()) {
         		//result != null && result != UNCANCELLABLE;判断标志位
                 incWaiters();
@@ -467,6 +468,8 @@ for (; ; ) {
 ```
 
 ## AbstractQueuedSynchronizer
+
+要实现多个线程阻塞、唤醒除了park/unpark还需要无锁链表实现的阻塞队列，把所有阻塞的线程串在一起。
 
 ### Node
 
@@ -748,6 +751,22 @@ AQS有同步队列 Condition有等待队列 两者使用的都是==AQS$Node==，
 6. AQS从头到尾顺序唤醒线程，直到等待队列中的线程被执行完毕结束。
 
 [怎么理解Condition](http://ifeve.com/understand-condition/) 以及《Java并发编程的艺术》150页
+
+### CountDownLatch
+
+一个线程等待其余n各线程完成才退出，
+
+AQS实现，类似于Semaphore 内部有一个 $.Sync
+
+### Semaphore
+
+信号量，当信号量变为1时，就成了排它锁。
+
+AQS实现，类似于ReetrantLock 内部有 \$.Sync ( \$.NofairSync 和 \$.FairSync )
+
+### CyclicBarrier
+
+ReetrantLock + Conditon
 
 ## Lock
 
@@ -1555,6 +1574,60 @@ public void run() {
     }
 }
 ```
+
+## ForkJoinPool
+
+线程池，**分治算法** 多线程并行计算框架。类似单机版的Map/Reduce 两个关键操作 Fork 和 Join
+
+
+ ForkJoin的两个类：RecursiveTask（有返回值） 和 RecursiveAction（无返回值）
+
+
+```java
+//分治，递归 实现RecursiveTask的compute方法：
+long mid = (start + end) >>> 1;
+SumTask left = new SumTask(start, mid);
+SumTask right = new SumTask(mid + 1, end);
+left.fork(); //ForkJoinTask关键接口
+right.fork();
+sum = left.join() + right.join();
+```
+
+ForkJoinPool大体结构如下：
+
+有一个全局队列(有一个线程来管理)，每个工作线程有自己的局部队列。有两个指针，queueTop 和 queueBase(volatile)
+
+![forkjoin](./img/forkjoinpool.png)
+
+```java
+@sun.misc.Contended
+public class ForkJoinPool extends AbstractExecutorService {
+
+}
+```
+
+工作窃取算法：
+
+​        一个Worker线程在执行完毕自己队列中的任务之后，可以窃取其他线程队列中的任务来执行，从而实现负载均衡，以防有的线程很空闲，有的线程很忙。
+
+### 阻塞栈 Treiber stack
+
+用到阻塞栈数据结构的有  FutureTask 、Phaser and SynchronousQueue、ForkJoinPool 
+
+### ParallelStream
+
+　　Java 8为ForkJoinPool添加了一个通用线程池，这个线程池用来处理那些没有被显式提交到任何线程池的任务。它是ForkJoinPool类型上的一个静态元素，它拥有的默认线程数量等于运行计算机上的处理器数量。当调用Arrays类上添加的新方法时，自动并行化就会发生。比如用来排序一个数组的并行快速排序，用来对一个数组中的元素进行并行遍历。自动并行化也被运用在Java 8新添加的Stream API中。
+
+```java
+List<Integer> numbers = Arrays.asList(1, 2, 3, 4, 5, 6, 7, 8, 9);
+numbers.parallelStream().forEach(out::println);  　　
+```
+
+## CompletableFuture
+
+具体实现利用了ForkJoinPool，暂时不分析源码…用法如下：
+
+[code](./src/main/java/CompletableFuture_/)
 
 ## volatile
 

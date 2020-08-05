@@ -199,9 +199,28 @@ protected void service(HttpServletRequest req, HttpServletResponse resp)
 
 Request从service拿到请求，并把请求之后的响应丢给response
 
+### ServletConfig
+
+获取Servlet的一些配置属性。实际传入为StandardWrapperFacade
+
+```java
+public interface ServletConfig {
+        public String getServletName();
+        public ServletContext getServletContext();
+        public String getInitParameter(String name);
+        public Enumeration<String> getInitParameterNames();
+}
+```
+
 ### ServletContext
 
-web容器在启动的时候，它会为每个web程序都创建一个对应的ServletContext对象，代表当前web应用。context管理
+web容器在启动的时候，它会为每个web程序都创建一个对应的ServletContext对象，代表当前web应用。
+
+tomcat实际传入为 ApplicationContextFacade 为 ServletContext 门面类（门面设计模式）避免获取到不能获取的数据。
+
+“握手型的交互式” 
+
+​        所谓“握手型的交互式”就是两个模块为了交换数据通常都会准备一个交易场景，这个场景一直跟随个这个交易过程直到这个交易完成为止。这个交易场景的初始化是根据这次交易对象指定的参数来定制的，这些指定参数通常就会是一个配置类。所以对号入座，交易场景就由 ServletContext 来描述，而定制的参数集合就由 ServletConfig 来描述，而 ServletRequest 和 ServletResponse 就是要交互的具体对象了。
 
 - 共享数据
 
@@ -296,3 +315,237 @@ public class MyFilter implements Filter {
 }
 ```
 
+## Tomcat
+
+tomcat启动逻辑基于监听器模式，所有容器都会继承Lifecycle接口，所有容器的修改和状态改变都会由它通知已经注册的观察者（Listener）
+
+主要类启动时序图：
+
+![tomcat](https://www.ibm.com/developerworks/cn/java/j-lo-servlet/image003.jpg)
+
+### Tomcat启动类
+
+```java
+public class Tomcat{
+	public static void main(String[] args) throws Exception {
+        //获取classloader
+        SecurityClassLoad.securityClassLoad(Thread.currentThread().getContextClassLoader());
+        //实例化tomcat
+        org.apache.catalina.startup.Tomcat tomcat = new org.apache.catalina.startup.Tomcat();
+        
+        tomcat.init(null);
+        
+        //for循环处理参数
+        for (int i = 0; i < args.length; i++) {
+            //如果是war包
+            File war = new File(args[i]);
+            tomcat.addWebapp(path, war.getAbsolutePath());
+        }
+        
+        tomcat.start();//开启tomcat服务 server.start();
+        //具体调用的是StandardSetver.start()方法，该方法继承自父类的父类。
+    }
+
+	public Context addWebapp(Host host, String contextPath, String docBase,
+            LifecycleListener config) {
+        silence(host, contextPath);
+        //...
+        //StandardContext 添加一个web应用时会创建一个standardContext容器
+        Context ctx = createContext(host, contextPath);//反射实例化
+        
+        ctx.setPath(contextPath);//访问路径
+        ctx.setDocBase(docBase);//实际物理路径
+        
+        //...
+        //实例化ContextConfig，并添加到ctx的监听队列中。
+        //ContextConfig ctxCfg = new ContextConfig(); 这块是旧版代码中的，新tomcat这块有改动
+        //LifecycleListener config 在调用addWebapp前实例化（反射）ContextConfig并且传入参数config
+        
+        //ContextConfig负责整个Web应用配置解析工作
+        ctx.addLifecycleListener(config);
+        
+        if (addDefaultWebXmlToWebapp && (config instanceof ContextConfig)) {
+            // prevent it from looking ( if it finds one - it'll have dup error )
+            ((ContextConfig) config).setDefaultWebXml(noDefaultWebXmlPath());
+            //设置web.xml
+        }
+        
+        //添加当前容器到父容器Host中。
+        if (host == null) {
+            getHost().addChild(ctx);//如果为null就先初始化父类容器 StandardHost
+        } else {
+            host.addChild(ctx);
+        }
+
+    }
+ }
+```
+
+StandardServer父类 LifecycleMBeanBase 的父类 
+
+```java
+public abstract class LifecycleBase implements Lifecycle {
+    @Override
+    public final synchronized void start() throws LifecycleException {
+        //...省略
+         startInternal();//模板方法，调用的是子类的方法。应该是StandardService?
+        //...省略
+    }
+}
+```
+
+开始初始化context
+
+```java
+public class StandardContext extends ContainerBase
+        implements Context, NotificationEmitter {
+    
+	protected synchronized void startInternal() throws LifecycleException {
+        
+    }
+}
+```
+
+### tomcat载入servlet等：
+
+```java
+public class ContextConfig implements LifecycleListener {
+    //...省略
+    //启动 主要解析web.xml 将web.xml配置写入到WebXml类中
+    protected synchronized void configureStart() {
+    	
+    }
+    //...省略
+    //将WebXml对象中属性设置到Context容器中，包括创建servlet对象、filter、listener等。
+    private void configureContext(WebXml webxml) {
+        //过滤器
+        for (FilterDef filter : webxml.getFilters().values()) {
+            if (filter.getAsyncSupported() == null) {
+                filter.setAsyncSupported("false");
+            }
+            context.addFilterDef(filter);
+        }
+        //过滤器对应的地址
+        for (FilterMap filterMap : webxml.getFilterMappings()) {
+            context.addFilterMap(filterMap);
+        }
+        
+        context.setJspConfigDescriptor(webxml.getJspConfigDescriptor());
+        //监听器
+        for (String listener : webxml.getListeners()) {
+            context.addApplicationListener(listener);
+        }
+        
+        //servlet 包装成 Warpper
+        for (ServletDef servlet : webxml.getServlets().values()) {
+            Wrapper wrapper = context.createWrapper();
+            // Description is ignored
+            // Display name is ignored
+            // Icons are ignored
+
+            // jsp-file gets passed to the JSP Servlet as an init-param
+
+            if (servlet.getLoadOnStartup() != null) {
+                wrapper.setLoadOnStartup(servlet.getLoadOnStartup().intValue());
+            }
+            if (servlet.getEnabled() != null) {
+                wrapper.setEnabled(servlet.getEnabled().booleanValue());
+            }
+            wrapper.setName(servlet.getServletName());
+            Map<String,String> params = servlet.getParameterMap();
+            for (Entry<String, String> entry : params.entrySet()) {
+                wrapper.addInitParameter(entry.getKey(), entry.getValue());
+            }
+            wrapper.setRunAs(servlet.getRunAs());
+            Set<SecurityRoleRef> roleRefs = servlet.getSecurityRoleRefs();
+            for (SecurityRoleRef roleRef : roleRefs) {
+                wrapper.addSecurityReference(
+                        roleRef.getName(), roleRef.getLink());
+            }
+            wrapper.setServletClass(servlet.getServletClass());
+            MultipartDef multipartdef = servlet.getMultipartDef();
+            if (multipartdef != null) {
+                long maxFileSize = -1;
+                long maxRequestSize = -1;
+                int fileSizeThreshold = 0;
+
+                if(null != multipartdef.getMaxFileSize()) {
+                    maxFileSize = Long.parseLong(multipartdef.getMaxFileSize());
+                }
+                if(null != multipartdef.getMaxRequestSize()) {
+                    maxRequestSize = Long.parseLong(multipartdef.getMaxRequestSize());
+                }
+                if(null != multipartdef.getFileSizeThreshold()) {
+                    fileSizeThreshold = Integer.parseInt(multipartdef.getFileSizeThreshold());
+                }
+
+                wrapper.setMultipartConfigElement(new MultipartConfigElement(
+                        multipartdef.getLocation(),
+                        maxFileSize,
+                        maxRequestSize,
+                        fileSizeThreshold));
+            }
+            if (servlet.getAsyncSupported() != null) {
+                wrapper.setAsyncSupported(
+                        servlet.getAsyncSupported().booleanValue());
+            }
+            wrapper.setOverridable(servlet.isOverridable());
+            context.addChild(wrapper);//最后将wrapper作为子容器添加到Context
+            //ContainerBase类中
+            //protected final HashMap<String, Container> children = new HashMap<>();应该是通过map保存
+            //当然期间有很多异常，权限判断等。
+        }
+    }
+}
+```
+
+### Servlet实例化
+
+注意一个Wrapper对应一个Servlet
+
+参数 loadOnStartup 大于 0 在 Context 容器启动的时候就实例化。
+
+剩下就是在 Wrapper.loadServlet 方法中开始实例化，初始化在 StandardWrapper 的 initServlet 方法，将包装了StandardWrapper对象的StandardWrapperFacade作为ServletConfig传给Servlet。
+
+（门面设计模式，包装了StandardWarpper类，避免Servlet拿到不该拿到的数据，同理ServletContext也是这样）
+
+```java
+protected final StandardWrapperFacade facade = new StandardWrapperFacade(this);
+
+private synchronized void initServlet(Servlet servlet)
+            throws ServletException {
+    //调用具体Servlet的init方法。StandardWrapperFacade作为servletConfig传入servlet
+     servlet.init(facade);
+    /*
+    public abstract class GenericServlet{
+        public void init(ServletConfig config) throws ServletException {
+            this.config = config;
+            this.init();
+        }
+    }
+    */
+}
+```
+
+```java
+public synchronized Servlet loadServlet() throws ServletException {
+    // Nothing to do if we already have an instance or an instance pool
+    //tomcat中如果没有实现SingleThreadModel则 servlet 是 单例
+    if (!singleThreadModel && (instance != null))
+        return instance;
+    
+    
+    InstanceManager instanceManager = ((StandardContext)getParent()).getInstanceManager();
+    //实例化servlet
+    servlet = (Servlet) instanceManager.newInstance(servletClass);//servletClass是在web.xml中传入的
+    //初始化servlet
+    initServlet(servlet);
+    fireContainerEvent("load", this);//监听，传播容器事件
+    
+    return servlet;//最后返回加载完成的servlet
+}
+```
+
+初始化Servlet时序图：
+
+![servlet](./readme.assets/20180809144624854)
