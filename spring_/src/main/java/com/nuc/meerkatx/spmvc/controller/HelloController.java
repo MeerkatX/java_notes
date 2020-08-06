@@ -18,7 +18,7 @@ public class HelloController {
     @RequestMapping("/h1")
     public String hello() {
         log.info("hello");
-        return "hello.jsp";
+        return "hello";
     }
 
 }

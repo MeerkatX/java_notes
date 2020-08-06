@@ -21,6 +21,11 @@ public class HelloServlet extends HttpServlet {
 //        this.getServletContext(); servlet上下文
 //        this.getInitParameter(); 获得初始化参数
         ServletContext servletContext = this.getServletContext();
+
+        //被废弃的方法，可以获取其他servlet
+//        Hello2Servlet hello2Servlet = (Hello2Servlet) servletContext.getServlet("Hello2Servlet");
+//        hello2Servlet.doGet(req,resp);
+
         servletContext.setAttribute("name", "meerkatx");
         String value = servletContext.getInitParameter("value");
         PrintWriter writer = resp.getWriter();

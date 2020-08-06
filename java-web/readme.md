@@ -270,13 +270,21 @@ String passwd = properties.getProperty("passwd");
 resp.getWriter().print(name + ": " + passwd);
 ```
 
-### HttpServletRequest
+### ServletContext具体方法
 
+参考api文档更好一点
 
+```java
+public interface ServletContext {
 
-### HttpServletResponse
+}
+```
 
+### HttpServletRequest & HttpServletResponse
 
+tomcat启动后，Connector 通过ServerSocket，或者NIO的ServerSocketChannel监听端口，建立连接之后解析数据，封装成request和response之后交给容器Container来处理。这一点与netty中HttpServerCodec编解码器有相似点。
+
+分别封装了请求头，输入输出流等内容。
 
 ## Filter
 
@@ -311,6 +319,94 @@ public class MyFilter implements Filter {
     @Override
     public void destroy() {
 
+    }
+}
+```
+
+### 过滤器原理：
+
+```java
+public interface Filter {
+    //初始化接口
+        default public void init(FilterConfig filterConfig) throws ServletException {}
+    //请求进来的时候调用，责任链设计模式
+        public void doFilter(ServletRequest request, ServletResponse response,
+                         FilterChain chain)
+            throws IOException, ServletException;
+    //销毁时被调用
+        default public void destroy() {}
+}
+```
+
+```java
+public interface FilterChain {
+    //责任链，调用下一个Filter
+    public void doFilter(ServletRequest request, ServletResponse response) throws IOException, ServletException;
+}
+```
+
+具体Tomcat中实现：
+
+Filter的url-pattern匹配在创建ApplicationFilterChain对象时进行，会把所有定义的Filter的url-pattern与当期URL匹配，如果匹配成功，就将这个Filter保存到filters数组中。
+
+```java
+public final class ApplicationFilterChain implements FilterChain {
+	//所有的拦截相同url的 filter
+    private ApplicationFilterConfig[] filters = new ApplicationFilterConfig[0];
+
+
+    /**
+     * The int which is used to maintain the current position
+     * in the filter chain. 当前责任链执行到数组哪里了
+     */
+    private int pos = 0;
+
+
+    /**
+     * The int which gives the current number of filters in the chain.总长度
+     */
+    private int n = 0;    
+    
+    /**
+     * The servlet instance to be executed by this chain.执行完毕后，调用servlet.service方法
+     */
+    private Servlet servlet = null;
+    
+    private void internalDoFilter(ServletRequest request,
+                                  ServletResponse response)
+        throws IOException, ServletException {
+
+        // Call the next filter if there is one
+        if (pos < n) {
+            //责任链在这里累加，当前一个filter再次调用doFilter方法时，进入该方法，进行累加
+            ApplicationFilterConfig filterConfig = filters[pos++];//获取下一个filter
+                Filter filter = filterConfig.getFilter();
+			//省略
+                filter.doFilter(request, response, this);//执行下一个filter
+			//省略
+            return;
+        }
+
+        // We fell off the end of the chain -- call the servlet instance
+        try {
+            if (ApplicationDispatcher.WRAP_SAME_OBJECT) {
+                lastServicedRequest.set(request);
+                lastServicedResponse.set(response);
+            }
+
+            if (request.isAsyncSupported() && !servletSupportsAsync) {
+                request.setAttribute(Globals.ASYNC_SUPPORTED_ATTR,
+                        Boolean.FALSE);
+            }
+            // Use potentially wrapped request from this point
+            if ((request instanceof HttpServletRequest) &&
+                    (response instanceof HttpServletResponse) &&
+                    Globals.IS_SECURITY_ENABLED ) {
+                //省略
+            } else {
+                servlet.service(request, response);//如果前面filter完全执行完毕，就到这里了
+            }
+        }
     }
 }
 ```
@@ -549,3 +645,163 @@ public synchronized Servlet loadServlet() throws ServletException {
 初始化Servlet时序图：
 
 ![servlet](./readme.assets/20180809144624854)
+
+### Tomcat中几大设计模式
+
+#### 门面设计模式
+
+各种Facade
+
+#### 观察者设计模式
+
+```java
+Lifecycle
+LifecycleSupport //这个东西在8.5的时候消失了
+LifecycleEvent //将事件抽象出来，定义了事件类别，可以对不同事件区别处理
+LifecycleBase //主题对多观察者的处理管理。
+//之后通过lifecycleBase来完成
+public abstract class LifecycleBase implements Lifecycle {
+    private final List<LifecycleListener> lifecycleListeners = new CopyOnWriteArrayList<>();//通过列表保存监听者
+    
+    @Override
+    public void addLifecycleListener(LifecycleListener listener) {
+        lifecycleListeners.add(listener);
+    }
+    
+    //发生事件，将事件传递给每个监听者
+    protected void fireLifecycleEvent(String type, Object data) {
+        LifecycleEvent event = new LifecycleEvent(this, type, data);
+        for (LifecycleListener listener : lifecycleListeners) {
+            //遍历监听者
+            listener.lifecycleEvent(event);
+        }
+    }
+    
+}
+//监听者接口，这样所有可以统一回调，见上面代码
+public interface LifecycleListener {
+    public void lifecycleEvent(LifecycleEvent event);
+}
+```
+
+#### 命令设计模式
+
+#### 责任链设计模式
+
+Tomcat容器设置，Engine -> Host -> Context -> Wapper 通过一个链传递请求
+
+```java
+public interface Pipeline extends Contained {
+
+}
+
+
+//pipline实现类，主要是一个单链表，用来管理Valve，这里Valve相当于一个链表的 Node
+public class StandardPipeline extends LifecycleBase implements Pipeline {
+     /**
+     * The basic Valve (if any) associated with this Pipeline.每个piline都应该有一个基础阀门Valve做基础处理，链表尾
+     */
+    protected Valve basic = null;
+
+
+    /**
+     * The Container with which this Pipeline is associated.
+     */
+    protected Container container = null;
+
+
+    /**
+     * The first valve associated with this Pipeline.链表头，next 在 Valve 节点中
+     */
+    protected Valve first = null;
+    
+    
+    @Override
+    public void addValve(Valve valve) {
+    	//...省略...
+        // Add this Valve to the set associated with this Pipeline
+        if (first == null) {
+            first = valve;
+            valve.setNext(basic);//调用value的setNext方法，实际调用的是抽象类ValueBase，将basic赋值给
+        } else {
+            Valve current = first;
+            while (current != null) {
+                if (current.getNext() == basic) {//添加到basic前，也就是链表尾部前面
+                    current.setNext(valve);
+                    valve.setNext(basic);
+                    break;
+                }
+                current = current.getNext();
+            }
+        }
+    }
+}
+
+
+public interface Valve {
+    /**
+     * @return the next Valve in the pipeline containing this Valve, if any.
+     */
+    public Valve getNext();
+
+
+    /**
+     * Set the next Valve in the pipeline containing this Valve.
+     *
+     * @param valve The new next valve, or <code>null</code> if none
+     */
+    public void setNext(Valve valve);
+    
+    //责任链模式调用的方法，传递request和response
+    public void invoke(Request request, Response response)
+        throws IOException, ServletException;
+}
+
+//实现了Value接口，保存了pipline的next
+public abstract class ValveBase extends LifecycleMBeanBase implements Contained, Valve {
+    /**
+     * The next Valve in the pipeline this Valve is a component of.
+     */
+    protected Valve next = null;
+}
+```
+
+![image-20200806204508268](./readme.assets/image-20200806204508268.png)
+
+纵向：
+
+获取下一个要传递的子容器，通过获取它的pipline头，传递下去
+
+```java
+host.getPipeline().getFirst().invoke(request, response);//engine
+context.getPipeline().getFirst().invoke(request, response);//host
+wrapper.getPipeline().getFirst().invoke(request, response);//context
+//最后在wrapper的invoke方法中将request和response传递给具体的servlet，期间调用filter方法等
+```
+
+横向：
+
+每个容器都有一个pipline，从头开始一个Value传递到下一个Value
+
+```
+//ErrorReportValve
+getNext().invoke(request, response);
+```
+
+![img](readme.assets\818454-20161025170804984-654825756.png)
+
+#### Filter的责任链
+
+Filter责任链首次调用是在WrapperValve.invoke方法中
+
+具体实现可以见前面Filter过滤器原理
+
+#### 两者对比：
+
+| 管道/阀门                                            | 过滤器链/过滤器                                |
+| ---------------------------------------------------- | ---------------------------------------------- |
+| 管道（Pipeline）                                     | 过滤器链（FilterChain）                        |
+| 阀门（Valve）                                        | 过滤器（Filter）                               |
+| 底层实现为具有头（first）、尾（basic）指针的单向链表 | 底层实现为数组                                 |
+| Valve的核心方法invoke(request,response)              | Filter核心方法doFilter(request,response,chain) |
+| pipeline.getFirst().invoke(request,response)         | filterchain.doFilter(request,response)         |
