@@ -12,7 +12,7 @@
 -  服务器端返回数据：Java服务器完成处理后，构建好的响应数据，将这些数据从用户缓冲区写入内核缓冲区。这里用到的是write系统调用。
 -  发送给客户端：Linux内核通过网络IO，将内核缓冲区中的数据写入网卡，网卡通过底层的通信协议，会将数据发送给目标客户端。
 
-![IO模型](doc/IO.png)
+![IO模型](readme.assets/IO.png)
 
 ### 多路复用IO (epoll)
 
@@ -35,7 +35,7 @@ cd fd
 
 
 
-![mio](doc/mNIO.png)
+![mio](readme.assets/mNIO.png)
 
 见[nettystudy](../nettystudy)
 
@@ -55,13 +55,13 @@ kafka -> netty
 
 ### BIO 阻塞IO
 
-![BIO](doc/BIO.png)
+![BIO](readme.assets/BIO.png)
 
 [code](./src/main/java/BIO)
 
 ### NIO 非阻塞IO
 
-![NIO](doc/NIO.png)
+![NIO](readme.assets/NIO.png)
 
 [code](./src/main/java/NIO)
 
@@ -72,7 +72,7 @@ kafka -> netty
 - 内核会给用户线程发送一个信号（Signal），或者回调用户线程注册的回调接口，告诉用户线程read操作完成了。
 - 用户线程读取用户缓冲区的数据，完成后续的业务操作
 
-![AIO](doc/AIO.png)
+![AIO](readme.assets/AIO.png)
 
 [code](./src/main/java/AIO)
 
@@ -159,11 +159,11 @@ Java NIO 就是`select()`利用epoll多路复用器，对每一个事件,Key,自
 
 传统数据流 如IO最开始的图，拷贝了4次
 
-![cp](doc/cp.png)
+![cp](readme.assets/cp.png)
 
 零拷贝减少了数据从内核空间到用户空间的复制，数据直接在内核空间中移动（ 通过调用Linux `sendfile`方法） 
 
-![zerocp](doc/zerocp.png)
+![zerocp](readme.assets/zerocp.png)
 
 ### Reactor模式
 

@@ -72,9 +72,9 @@ protected DefaultChannelPipeline(Channel channel) {
 
 [Netty 源码解析（三）: Netty 的 Future 和 Promise](https://www.cnblogs.com/yuandengta/p/12800131.html)
 
-#### Future 和 Promise
+### Future 和 Promise
 
-
+接口
 
 ```java
 public interface ChannelPromise extends ChannelFuture, Promise<Void> {
@@ -123,17 +123,24 @@ public interface ChannelPromise extends ChannelFuture, Promise<Void> {
 }
 ```
 
-其中一个实现类： DefaultPromise
+### DefaultPromise
+
+观察者模式
 
 ```java
 public class DefaultPromise<V> extends AbstractFuture<V> implements Promise<V> {
     // 保存执行结果
     private volatile Object result;
-    // 执行任务的线程池，promise 持有 executor 的引用，这个其实有点奇怪了
-    // 因为“任务”其实没必要知道自己在哪里被执行的
+    
+    // 执行任务的线程池，promise 持有 executor 的引用
     private final EventExecutor executor;
-      // 监听者，回调函数，任务结束后（正常或异常结束）执行
+    
+      // 监听者，回调函数，任务结束后（正常或异常结束）执行，这个底层用类封装，采用数组保存listeners
     private Object listeners;
+    //    listeners = new DefaultFutureListeners((GenericFutureListener<?>) listeners, listener);
+    //    private GenericFutureListener<? extends Future<?>>[] listeners;
+    //    当达到监听者数组长度最大值，扩容 this.listeners = listeners = Arrays.copyOf(listeners, size << 1); 两倍
+    //    listeners[size] = l;  "l" 即传入的listeners
 
     // 等待这个 promise 的线程数(调用sync()/await()进行等待的线程数量)
     private short waiters;
@@ -1240,4 +1247,154 @@ public class DelimiterBasedFrameDecoder extends ByteToMessageDecoder {
 解决：
 
 在接收端，Netty程序需要根据自定义协议，将读取到的进程缓冲区ByteBuf，在应用层进行二次拼装，重新组装应用层数据包，即分包，拆包。
+
+## pipline的责任链模式分析
+
+netty责任链通过 链表 来完成，其中 ChannelHandlerContext 接口下的抽象类 abstract class AbstractChannelHandlerContext 为链表节点。
+
+```java
+//接口
+public interface ChannelPipeline
+        extends ChannelInboundInvoker, ChannelOutboundInvoker, Iterable<Entry<String, ChannelHandler>> {
+     //增删改查责任链节点   
+}
+//实现类
+public class DefaultChannelPipeline implements ChannelPipeline {
+    final AbstractChannelHandlerContext head;//保存了头尾节点
+    final AbstractChannelHandlerContext tail;
+    private final Channel channel;//保存了连接channel，因为整个管道就这个channel
+    
+    //初始化方法
+    protected DefaultChannelPipeline(Channel channel) {
+        this.channel = ObjectUtil.checkNotNull(channel, "channel");
+        succeededFuture = new SucceededChannelFuture(channel, null);
+        voidPromise =  new VoidChannelPromise(channel, true);
+
+        tail = new TailContext(this);//内部类，做一些必须的操作
+        head = new HeadContext(this);
+
+        head.next = tail;
+        tail.prev = head;
+    }
+    
+    //将handler添加到责任链的方法，通过将channel包装进context内，连接到链表
+    @Override
+    public final ChannelPipeline addFirst(EventExecutorGroup group, String name, ChannelHandler handler) {
+        final AbstractChannelHandlerContext newCtx;
+        synchronized (this) {
+            checkMultiplicity(handler);
+            
+            name = filterName(name, handler);
+            
+            //添加handler到链表，通过新建context节点（将handler保存在context中）
+            newCtx = newContext(group, name, handler);
+            //链表添加操作
+            addFirst0(newCtx);
+
+            if (!registered) {
+                newCtx.setAddPending();
+                callHandlerCallbackLater(newCtx, true);
+                return this;
+            }
+
+            EventExecutor executor = newCtx.executor();
+            if (!executor.inEventLoop()) {
+                callHandlerAddedInEventLoop(newCtx, executor);
+                return this;
+            }
+        }
+        //handler添加成功事件
+        callHandlerAdded0(newCtx);//添加成功之后，通知该handler并调用其handlerAdded方法。属于观察者模式
+        return this;
+    }
+    //还有很多链表操作，remove，addLast等
+    
+    //其他调用该pipline，将责任从头传递下去的方法
+    @Override
+    public final ChannelPipeline fireChannelRead(Object msg) {
+        AbstractChannelHandlerContext.invokeChannelRead(head, msg);//责任方法
+        return this;
+    }
+}
+```
+
+```java
+//链表节点
+public interface ChannelHandlerContext extends AttributeMap, ChannelInboundInvoker, ChannelOutboundInvoker {
+
+}
+//Channel、pipline、channelHandler模块间交互上下文类，双向链表节点
+//应该类似于tomcat中servletContext，是一种握手型的交互式
+abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, ResourceLeakHint {
+    volatile AbstractChannelHandlerContext next;
+    volatile AbstractChannelHandlerContext prev;
+    private final DefaultChannelPipeline pipeline;//保存了所在的pipline
+    final EventExecutor executor;//
+    
+    //责任传递
+    static void invokeChannelRead(final AbstractChannelHandlerContext next, Object msg) {
+        //当然这里还没有传递到下一个
+        final Object m = next.pipeline.touch(ObjectUtil.checkNotNull(msg, "msg"), next);
+        EventExecutor executor = next.executor();
+        if (executor.inEventLoop()) {
+            next.invokeChannelRead(m);//传递到next
+        } else {
+            executor.execute(new Runnable() {
+                @Override
+                public void run() {
+                    next.invokeChannelRead(m);//传递到next
+                }
+            });
+        }
+    }
+    
+    //next调用的invokeChannelRead方法
+    private void invokeChannelRead(Object msg) {
+        if (invokeHandler()) {
+            //判断是否已调用{ @link ChannelHandler＃channelRead（ChannelHandlerContext,Object）}等各种方法
+            try {
+                ((ChannelInboundHandler) handler()).channelRead(this, msg);//调用绑定的handler的channelRead方法
+                //之后就需要在channelRead方法中再调用 fireChannelRead方法来将责任传递下去。
+                //ctx.fireChannelRead(msg);
+            } catch (Throwable t) {
+                invokeExceptionCaught(t);
+            }
+        } else {
+            //如果已调用，直接转发到下一个handler处理
+            fireChannelRead(msg);
+        }
+    }
+    
+    @Override
+    public ChannelHandlerContext fireChannelRead(final Object msg) {
+        //findContextInBound即查找下一个责任节点 context 调用 handler 
+        invokeChannelRead(findContextInbound(MASK_CHANNEL_READ), msg);
+        return this;
+    }
+    
+    private AbstractChannelHandlerContext findContextInbound(int mask) {
+        AbstractChannelHandlerContext ctx = this;
+        EventExecutor currentExecutor = executor();
+        do {
+            ctx = ctx.next;//循环查找下一个
+        } while (skipContext(ctx, currentExecutor, mask, MASK_ONLY_INBOUND));//通过mask判断是否是需要的inbound handler
+        return ctx;
+    }
+}
+
+
+//子类保存了handler
+final class DefaultChannelHandlerContext extends AbstractChannelHandlerContext {
+
+    private final ChannelHandler handler;
+}
+```
+
+| 管道/上下文                                                |
+| ---------------------------------------------------------- |
+| 管道pipline                                                |
+| 通道上下文ChannelContext                                   |
+| 底层实现为 具有头节点、尾结点的双向链表                    |
+| Context的核心方法invokeChannelRead -> fireChannelRead      |
+| AbstractChannelHandlerContext.invokeChannelRead(head, msg) |
 
