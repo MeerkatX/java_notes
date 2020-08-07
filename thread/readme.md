@@ -332,11 +332,11 @@ public interface Future<V> {
     V get(long timeout, TimeUnit unit)
         throws InterruptedException, ExecutionException, TimeoutException;
 }
-//针对get方法有不同实现
-//常见有：FutureTask,AbstractFuture（netty）
+	//针对get方法有不同实现
+	//常见有：FutureTask,AbstractFuture（netty）
 
-//AbstractFuture
-@Override
+	//AbstractFuture
+	@Override
     public V get() throws InterruptedException, ExecutionException {
         await();//阻塞等待目标是否完成
         /*
@@ -362,7 +362,7 @@ public interface Future<V> {
         throw new ExecutionException(cause);
     }
 
-//FutureTask
+	//FutureTask 采用 state + park()/unpark() 实现
 
     public V get() throws InterruptedException, ExecutionException {
         int s = state;

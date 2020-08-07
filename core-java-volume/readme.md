@@ -2,6 +2,22 @@
 
 ## IO 
 
+### 网络编程
+
+- 服务器实例化一个 `ServerSocket` 对象，表示通过服务器上的端口通信。
+- 服务器调用 `ServerSocket` 类的 accept() 方法，该方法将一直等待，直到客户端连接到服务器上给定的端口。
+- 服务器正在等待时，一个客户端实例化一个 Socket 对象，指定服务器名称和端口号来请求连接。
+- Socket 类的构造函数试图将客户端连接到指定的服务器和端口号。如果通信被建立，则在客户端创建一个 Socket 对象能够与服务器进行通信。
+- 在服务器端，accept() 方法返回服务器上一个新的 socket 引用，该 socket 连接到客户端的 socket。
+
+对于NIO来说 `ServerSocketChannel` 也是如此，监听端口，新建一个 `SocketChannel` 引用。
+
+因此java多路复用` epoll`实际指的是 `Selector.select` 方法（调用`Linux`的`epoll`函数），用轮询等方法轮询这些Channel事件，进行管理。实际上 `ServerSocketChannel SocketChannel DatagramChannel` 这些类都实现了 `SelectableChannel` 抽象类(只有实现该抽象类的Channel才能注册到Selector，`FileChannel` 没有实现，不能被Selector 多路复用)。
+
+[selector介绍](http://ifeve.com/selectors/)
+
+### 各种 IO
+
 (同步、异步、阻塞、非阻塞)
 
 这里复制了2次，即物理设备到内核缓冲区，内核缓冲区到用户缓冲区

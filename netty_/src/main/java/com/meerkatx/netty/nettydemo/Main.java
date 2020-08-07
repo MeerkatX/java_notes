@@ -1,11 +1,17 @@
 package com.meerkatx.netty.nettydemo;
 
+import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.util.concurrent.*;
+
+import java.nio.channels.ServerSocketChannel;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadPoolExecutor;
 
 /**
  * @Auther: 徐少伟
  * @Date: 2020/7/16
- * @Description:
+ * @Description: Promise用法
  */
 public class Main {
 
@@ -13,6 +19,7 @@ public class Main {
 //        Future
         EventExecutor executor = new DefaultEventExecutor();
         Promise promise = new DefaultPromise(executor);
+
 
         promise.addListener(new GenericFutureListener<Future<Integer>>() {
             @Override

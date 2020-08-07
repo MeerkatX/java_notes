@@ -14,13 +14,17 @@ import java.nio.channels.SocketChannel;
 public class ChannelDemo {
     public static void main(String[] args) throws Exception {
 
-        //用于文件的数据读写，只能是阻塞模式
+        /////////////////////////////////////////////////////////////////////////////////////////////////////
+
+        //用于文件的数据读写，只能是阻塞模式，不能绑定到Selector中，没有继承 SelectableChannel 抽象类
         FileChannel fileInChannel = new FileInputStream("in.txt").getChannel();
         FileChannel fileOutChannel = new FileOutputStream("in.txt").getChannel();
 
         //文件随机访问类
         FileChannel fileChannel = new RandomAccessFile("in.txt", "rw").getChannel();
+        ////////////////////////////////////可被注册到Selector中的Channel///////////////////////////////////////
 
+        //继承 SelectableChannel 抽象类
 
         // 套接字通道，用于Socket套接字TCP连接的数据读写
         SocketChannel socketChannel = SocketChannel.open();

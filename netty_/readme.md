@@ -66,15 +66,20 @@ protected DefaultChannelPipeline(Channel channel) {
 }
 ```
 
-
-
-
-
 [Netty 源码解析（三）: Netty 的 Future 和 Promise](https://www.cnblogs.com/yuandengta/p/12800131.html)
 
 ### Future 和 Promise
 
-接口
+**有两种编程方式，一种是用 await()，等 await() 方法返回后，得到 promise 的执行结果，然后处理它；另一种就是提供 Listener 实例，我们不太关心任务什么时候会执行完，只要它执行完了以后会去执行 listener 中的处理方法就行。**
+
+这两种方式真正完成了异步，Guava异步也是有两种方式来完成，而 Java 的 FutureTask 只完成了一半（即阻塞get）
+
+Promise、Guava和 FutureTask 不同点在于：
+
+- Promise和Guava是非阻塞的异步回调，调用线程是不阻塞的，可以继续执行自己的业务逻辑。也可以调用阻塞方法来获取结果
+- FutureTask是阻塞的异步回调，调用线程是阻塞的，在获取异步结果的过程中，一直阻塞等待异步线程返回结果。后来添加了CompletableFuture来实现真正的非阻塞异步回调。
+
+Promise的await方法通过sync + this.wait() + waiters(仅计数用)
 
 ```java
 public interface ChannelPromise extends ChannelFuture, Promise<Void> {
@@ -125,8 +130,6 @@ public interface ChannelPromise extends ChannelFuture, Promise<Void> {
 
 ### DefaultPromise
 
-观察者模式
-
 ```java
 public class DefaultPromise<V> extends AbstractFuture<V> implements Promise<V> {
     // 保存执行结果
@@ -156,7 +159,7 @@ setSuccess和trySuccess区别：
 ```java
 @Override
 public Promise<V> setSuccess(V result) {
-    if (setSuccess0(result)) {
+    if (setSuccess0(result)) {//setSuccess0会调用 notifyListeners(); 主题通知所有监听者
         return this;
     }
     throw new IllegalStateException("complete already: " + this);
@@ -205,11 +208,11 @@ public Promise<V> await() throws InterruptedException {
 
     checkDeadLock();
 
-    synchronized (this) {
-        while (!isDone()) {
+    synchronized (this) {//获取锁
+        while (!isDone()) {//如果没有完成
             incWaiters();
             try {
-                wait();
+                wait();//这里是阻塞了调用类 this.wait()，与java future不同
             } finally {
                 decWaiters();
             }
