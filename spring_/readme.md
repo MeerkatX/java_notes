@@ -16,7 +16,9 @@
 
 org.springframework.beans 主要解决 Bean定义、Bean的创建、Bean的解析
 
-Bean的创建： 工厂方法
+### Bean的创建
+
+工厂方法
 
 ![image-20200807161957206](readme.assets/image-20200807161957206.png)
 
@@ -32,7 +34,7 @@ HierarchicalBeanFactory 表示这些Bean是有继承关系的。
 
 DefaultListableBeanFactory
 
-Bean的定义：
+### Bean的定义
 
 ![image-20200807162657120](readme.assets/image-20200807162657120.png)
 
@@ -337,7 +339,9 @@ public class AnnotationConfigWebApplicationContext extends AbstractRefreshableWe
 
 - IOC容器
 
-循环依赖三级缓存：
+### 循环依赖：
+
+三级缓存机制
 
 `DefaultSingletonBeanRegistry`
 
@@ -388,15 +392,7 @@ protected Object getSingleton(String beanName, boolean allowEarlyReference) {
 	}
 ```
 
----------------------------
-常用注解：
-
-@Component @AutoWired @ComponentScan
-
------------
-想要成为一个框架，首先要考虑一定是扩展性
-
-spring提供的扩展性有：
+## spring扩展性
 
 1、在对象创建前添加某些功能
 
@@ -407,6 +403,56 @@ spring提供的扩展性有：
 4、抽象出一堆接口来帮助扩展
 
 5、面向接口编程
+
+## spring事务
+
+spring事务主要有 编程式事务 和 声明式事务。
+
+使用事务：
+
+```java
+//获取数据库连接  
+Connection con = DriverManager.getConnection()
+
+//开启事务
+con.setAutoCommit(true/false);
+
+//执行数据操作（crud）
+
+//提交事务/回滚事务 
+con.commit() / con.rollback()
+
+//关闭连接 
+conn.close()
+```
+
+底层原理：**动态代理** 
+
+## 注解
+
+**@Component**：这将 java 类标记为 bean。它是任何 Spring 管理组件的通用构造型。spring 的组件扫描机制现在可以将其拾取并将其拉入应用程序环境中。
+
+**@Controller**：这将一个类标记为 Spring Web MVC 控制器。标有它的 Bean 会自动导入到 IoC 容器中。
+
+**@Service**：此注解是组件注解的特化。它不会对 @Component 注解提供任何其他行为。您可以在服务层类中使用@Service 而不是 @Component，因为它以更好的方式指定了意图。
+
+**@Repository**：这个注解是具有类似用途和功能的 @Component 注解的特化。它为 DAO 提供了额外的好处。它将 DAO 导入 IoC 容器，并使未经检查的异常有资格转换为 Spring DataAccessException。
+
+**@Bean** 注解告诉Spring这个方法将会返回一个对象，这个对象要注册为Spring应用上下文中的bean。通常方法体中包含了最终产生bean实例的逻辑。
+
+@Component（@Controller、@Service、@Repository）通常是通过类路径扫描来自动侦测以及自动装配到Spring容器中。
+
+而@Bean注解通常是我们在标有该注解的方法中定义产生这个bean的逻辑。
+
+```java
+public class WireThirdLibClass {
+    //可以搞一些自定义加载类
+    @Bean
+    public ThirdLibClass getThirdLibClass() {
+        return new ThirdLibClass();
+    }
+}
+```
 
 ## spring-mvc
 

@@ -1,4 +1,4 @@
-
+package InterFace_Abstract_Extent_Implements;
 
 /**
  * @Auther: 徐少伟
@@ -7,7 +7,7 @@
  */
 public abstract class Father {
 
-    private String name;
+    private String name = "Father";
 
     public void setName(String name) {
         this.name = name;

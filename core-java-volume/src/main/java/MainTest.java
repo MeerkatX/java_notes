@@ -1,5 +1,10 @@
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.ArrayDeque;
 import java.util.Arrays;
+import java.util.Deque;
 import java.util.concurrent.Delayed;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -11,7 +16,6 @@ public class MainTest {
 
 
     public static void main(String[] args) {
-
 
 
         int j = 1;
@@ -42,5 +46,8 @@ public class MainTest {
         i = 1;
         i = i++;
         System.out.println(i);
+
+        Deque<Character> deque = new ArrayDeque();
+        deque.poll();
     }
 }

@@ -16,7 +16,7 @@ public class MyCollection {
         new HashSet<>();
         new TreeSet<>();
         new TreeMap<>();
-
+        new PriorityQueue<>();
 
         HashMap<Integer, Integer> map = new HashMap<>();
         for (int i = 0; i < 16; i++) {

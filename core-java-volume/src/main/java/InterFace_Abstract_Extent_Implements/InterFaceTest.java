@@ -1,3 +1,4 @@
+package InterFace_Abstract_Extent_Implements;
 
 /**
  * @Auther: 徐少伟
@@ -9,5 +10,11 @@ public interface InterFaceTest {
 
     public default void abc() {
         System.out.println("sss");
+    }
+
+    void get();
+
+    public static void ab(){
+        System.out.println("ss");
     }
 }

@@ -1,9 +1,12 @@
 package com.meerkatx.netty.nettydemo;
 
+import io.netty.channel.nio.NioEventLoop;
+import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.util.concurrent.*;
 
 import java.nio.channels.ServerSocketChannel;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -52,5 +55,6 @@ public class Main {
         });
 
         promise.sync();
+
     }
 }

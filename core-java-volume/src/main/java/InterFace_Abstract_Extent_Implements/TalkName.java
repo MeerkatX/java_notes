@@ -1,6 +1,4 @@
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.util.ArrayList;
+package InterFace_Abstract_Extent_Implements;
 
 /**
  * @Auther: 徐少伟
@@ -12,4 +10,6 @@ public interface TalkName {
     default String getName() {
         return "不知道";
     }
+
+
 }

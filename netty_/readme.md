@@ -274,6 +274,30 @@ private ChannelFuture doBind(final SocketAddress localAddress) {
 
 在上面的 doConnect/Bind 方法中，我们看到它在调用底层的 connect/bind 方法后，会设置 interestOps 为 SelectionKey.OP_CONNECT/OP_ACCEPT。剩下的就是 NioEventLoop 的事情了，还记得 NioEventLoop 的 run() 方法吗？也就是说这里的 connect 成功以后，这个 TCP 连接就建立起来了，后续的操作会在 NioEventLoop.run() 方法中被 processSelectedKeys() 方法处理掉。
 
+## 线程模型
+
+[Netty 4.x线程模型源码分析](https://juejin.im/post/6844903894170992648)
+
+### 单个线程
+
+主要分为两类：
+
+- SingleThreadEventLoop 派生出了一系列的 EventLoop，常用的就是NioEventLoop，每个SingleThreadEventLoop 都是一个单独的线程
+
+- DefaultEventExecutor 也是单独的线程，以串行方式执行提交到 LinkedBlockingQueue 所有任务
+
+![img](readme.assets/16c14a914b801896)
+
+### 线程组/池
+
+分为两类：
+
+- MultithreadEventLoopGroup，主要常用的就是 NioEventLoopGroup，线程池组，用来管理 NioEventLoop
+
+- DefaultEventExecutorGroup，类似的用来管理 DefaultEventExecutor
+
+![img](readme.assets/16c14a938d736142)
+
 ## 线程和Channel
 
 eventloopgroup相当于是线程池，eventloop相当于线程
@@ -297,6 +321,23 @@ protected MultithreadEventExecutorGroup(int nThreads, Executor executor,
             // 为每个任务新建一个线程 Executor接口 Runnable 命令模式
             executor = new ThreadPerTaskExecutor(newDefaultThreadFactory());
             //实现类 ThreadPerTaskExecutor 的逻辑就是每来一个任务，新建一个线程。
+/*
+
+hreadPerTaskExecutor具体实现方法：
+
+        public final class ThreadPerTaskExecutor implements Executor {
+            private final ThreadFactory threadFactory;
+
+            public ThreadPerTaskExecutor(ThreadFactory threadFactory) {
+                this.threadFactory = ObjectUtil.checkNotNull(threadFactory, "threadFactory");
+            }
+
+            @Override
+            public void execute(Runnable command) {
+                threadFactory.newThread(command).start();//其实就是开一个线程
+            }
+        }
+*/
         }
 
         children = new EventExecutor[nThreads];//相当于线程数组
@@ -304,31 +345,16 @@ protected MultithreadEventExecutorGroup(int nThreads, Executor executor,
         for (int i = 0; i < nThreads; i ++) {
             boolean success = false;
             try {
-                children[i] = newChild(executor, args);//对每个执行器进行实例化 即开线程
+			    // 对每个执行器进行实例化 即开线程
+        	 	// NioEventLoopGroup#newChild 会创建 NioEventLoop
+        	 	// DefaultEventExecutorGroup#newChild 会创建 DefaultEventExecutor
+                children[i] = newChild(executor, args);
                 success = true;
             } catch (Exception e) {
                 // TODO: Think about if this is a good exception type
                 throw new IllegalStateException("failed to create a child event loop", e);
             } finally {
-                //如果创建线程失败的处理
-                if (!success) {
-                    for (int j = 0; j < i; j ++) {
-                        children[j].shutdownGracefully();
-                    }
-
-                    for (int j = 0; j < i; j ++) {
-                        EventExecutor e = children[j];
-                        try {
-                            while (!e.isTerminated()) {
-                                e.awaitTermination(Integer.MAX_VALUE, TimeUnit.SECONDS);
-                            }
-                        } catch (InterruptedException interrupted) {
-                            // Let the caller handle the interruption.
-                            Thread.currentThread().interrupt();
-                            break;
-                        }
-                    }
-                }
+                //如果创建线程失败的处理...执行关闭，中断等。
             }
         }
 
@@ -342,6 +368,7 @@ protected MultithreadEventExecutorGroup(int nThreads, Executor executor,
             @Override
             public void operationComplete(Future<Object> future) throws Exception {
                 if (terminatedChildren.incrementAndGet() == children.length) {
+                    //terminatedChildren.incrementAndGet() 这个finial Atomtic
                     terminationFuture.setSuccess(null);
                 }
             }
@@ -349,8 +376,10 @@ protected MultithreadEventExecutorGroup(int nThreads, Executor executor,
 
         for (EventExecutor e: children) {
             e.terminationFuture().addListener(terminationListener);
+            //terminationFuture 与线程绑定的一个Promise，直接随NioEventLoop 或 DefaultEventExecutor创建
+            //private final Promise<?> terminationFuture = new DefaultPromise<Void>(GlobalEventExecutor.INSTANCE);
         }
-
+		// 缓存一下可读的副本，可以使用迭代器遍历
         Set<EventExecutor> childrenSet = new LinkedHashSet<EventExecutor>(children.length);
         Collections.addAll(childrenSet, children);
         readonlyChildren = Collections.unmodifiableSet(childrenSet);
@@ -365,7 +394,8 @@ NioEventLoopGroup类中重写
 @Override
 protected EventLoop newChild(Executor executor, Object... args) throws Exception {
     EventLoopTaskQueueFactory queueFactory = args.length == 4 ? (EventLoopTaskQueueFactory) args[3] : null;
-    //调用NioEventLoop构造方法
+    //调用NioEventLoop构造方法，层层递进到父类 SingleThreadEventExecutor         
+    //this.executor = ThreadExecutorMap.apply(executor, this);方法具体调用了execute开了线程。
     return new NioEventLoop(this, executor, (SelectorProvider) args[0],
         ((SelectStrategyFactory) args[1]).newSelectStrategy(), (RejectedExecutionHandler) args[2], queueFactory);
 }
@@ -375,7 +405,6 @@ NioEventLoop 其实就是一个线程
 
 ```java
 //线程池 NioEventLoopGroup 是池中的线程 NioEventLoop 的 parent
-
 NioEventLoop(NioEventLoopGroup parent, Executor executor, SelectorProvider selectorProvider,
              SelectStrategy strategy, RejectedExecutionHandler rejectedExecutionHandler,
              EventLoopTaskQueueFactory queueFactory) {
@@ -1251,9 +1280,13 @@ public class DelimiterBasedFrameDecoder extends ByteToMessageDecoder {
 
 在接收端，Netty程序需要根据自定义协议，将读取到的进程缓冲区ByteBuf，在应用层进行二次拼装，重新组装应用层数据包，即分包，拆包。
 
+- `LineBasedFrameDecoder` 可以基于换行符解决。
+- `DelimiterBasedFrameDecoder`可基于分隔符解决。
+- `FixedLengthFrameDecoder`可指定长度解决。
+
 ## pipline的责任链模式分析
 
-netty责任链通过 链表 来完成，其中 ChannelHandlerContext 接口下的抽象类 abstract class AbstractChannelHandlerContext 为链表节点。
+netty责任链通过 **链表** 来完成，其中 ChannelHandlerContext 接口下的抽象类 abstract class AbstractChannelHandlerContext 为链表节点。
 
 ```java
 //接口
