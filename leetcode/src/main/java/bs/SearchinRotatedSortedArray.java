@@ -8,6 +8,11 @@ package bs;
 public class SearchinRotatedSortedArray {
 
     public static void main(String[] args) {
+
+        int mid1 = (2_147_483_647 - 2_000_000_000)/2 + 2_000_000_000;
+        int mid2 = (2_147_483_647 + 2_000_000_000)>>>1;
+        int mid3 = (2_147_483_647 + 2_000_000_000)/2;
+        System.out.println(mid1+":"+mid2+":"+mid3+":"+((2_147_483_647 + 2_000_000_000)>>1));
         new SearchinRotatedSortedArray().search(new int[]{5,6,7,9,11,1,2},11);
     }
 
