@@ -805,3 +805,9 @@ Filter责任链首次调用是在WrapperValve.invoke方法中
 | 底层实现为具有头（first）、尾（basic）指针的单向链表 | 底层实现为数组                                 |
 | Valve的核心方法invoke(request,response)              | Filter核心方法doFilter(request,response,chain) |
 | pipeline.getFirst().invoke(request,response)         | filterchain.doFilter(request,response)         |
+
+## 加载驱动方法
+
+1. Class.forName("com.microsoft.sqlserver.jdbc.SQLServerDriver");
+2. DriverManager.registerDriver(new com.mysql.jdbc.Driver());
+3. System.setProperty("jdbc.drivers", "com.mysql.jdbc.Driver");

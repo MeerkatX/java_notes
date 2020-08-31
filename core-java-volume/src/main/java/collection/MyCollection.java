@@ -16,6 +16,7 @@ public class MyCollection {
         new HashSet<>();
         new TreeSet<>();
         new TreeMap<>();
+        new LinkedHashMap<>();
         new PriorityQueue<>();
 
         HashMap<Integer, Integer> map = new HashMap<>();

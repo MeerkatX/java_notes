@@ -406,9 +406,151 @@ protected Object getSingleton(String beanName, boolean allowEarlyReference) {
 
 ## spring事务
 
+事务属性：隔离级别、传播行为、回滚规则、是否只读、事务超时
+
+[可能是最漂亮的Spring事务管理详解](https://juejin.im/post/6844903608224333838)
+
+[全面分析 Spring 的编程式事务管理及声明式事务管理](https://developer.ibm.com/zh/articles/os-cn-spring-trans/)
+
 spring事务主要有 编程式事务 和 声明式事务。
 
-使用事务：
+### 事务管理接口
+
+- **PlatformTransactionManager：** （平台）事务管理器
+- **TransactionDefinition：** 事务定义信息(事务隔离级别、传播行为、超时、只读、回滚规则)
+- **TransactionStatus：** 事务运行状态
+
+#### TransactionDefinition
+
+```java
+public interface TransactionDefinition {
+    //事务的传播行为
+	default int getPropagationBehavior() {
+		return PROPAGATION_REQUIRED;// 0
+        //	int PROPAGATION_NESTED = 6;
+        //	int PROPAGATION_NEVER = 5;
+        //	int PROPAGATION_NOT_SUPPORTED = 4;
+        //	int PROPAGATION_REQUIRES_NEW = 3;
+        //	int PROPAGATION_MANDATORY = 2;
+        //	int PROPAGATION_SUPPORTS = 1;
+	}
+    //事务的隔离级别
+    default int getIsolationLevel() {
+		return ISOLATION_DEFAULT;// -1
+         //int ISOLATION_READ_UNCOMMITTED = 1;
+         //int ISOLATION_READ_COMMITTED = 2;
+         //int ISOLATION_REPEATABLE_READ = 4;
+         //int ISOLATION_SERIALIZABLE = 8;
+	}
+    //事务超时时间
+    default int getTimeout() {
+		return TIMEOUT_DEFAULT;// -1
+	}
+    //返回是否优化为只读事务
+    default boolean isReadOnly() {
+		return false;
+	}
+    //返回事务名称
+    default String getName() {
+		return null;
+	}
+
+}
+```
+
+#### PlatformTransactionManager 
+
+用于执行具体的事务操作
+
+```java
+public interface PlatformTransactionManager extends TransactionManager {
+	TransactionStatus getTransaction(@Nullable TransactionDefinition definition)
+			throws TransactionException;//返回一个TransactionStatus对象，可能代表一个新的或者已经存在的事务
+    void commit(TransactionStatus status) throws TransactionException;
+    void rollback(TransactionStatus status) throws TransactionException;
+}
+```
+
+#### TransactionStatus
+
+```java
+public interface TransactionStatus extends TransactionExecution, SavepointManager, Flushable {
+	boolean hasSavepoint();
+	@Override
+    void flush();
+}
+```
+
+### 事务传播行为
+
+当事务方法被另一个事务方法调用时，必须指定事务应该如何传播。例如：方法可能继续在现有事务中运行，也可能开启一个新事务，并在自己的事务中运行。
+
+传播行为定义了被调用方法的事务边界
+
+| 传播行为                      | 意义                                                    |
+| ----------------------------- | ------------------------------------------------------------ |
+| PROPERGATION_MANDATORY    | 表示方法必须运行在一个事务中，如果当前事务不存在，就抛出异常 |
+| PROPAGATION_NESTED        | 表示如果当前事务存在，则方法应该运行在一个嵌套事务中。否则，它看起来和 PROPAGATION_REQUIRED看起来没什么俩样 |
+| PROPAGATION_NEVER         | 表示方法不能运行在一个事务中，否则抛出异常               |
+| PROPAGATION_NOT_SUPPORTED | 表示方法不能运行在一个事务中，如果当前存在一个事务，则该方法将被挂起 |
+| PROPAGATION_REQUIRED      | 表示当前方法必须运行在一个事务中，如果当前存在一个事务，那么该方法运行在这个事务中，否则，将创建一个新的事务 |
+| PROPAGATION_REQUIRES_NEW  | 表示当前方法必须运行在自己的事务中，如果当前存在一个事务，那么这个事务将在该方法运行期间被挂起 |
+| PROPAGATION_SUPPORTS      | 表示当前方法不需要运行在一个是事务中，但如果有一个事务已经存在，该方法也可以运行在这个事务中 |
+
+### 隔离级别
+
+在操作数据时可能带来 3 个副作用，分别是脏读、不可重复读、幻读。为了避免这 3 中副作用的发生，在标准的 SQL 语句中定义了 4 种隔离级别，分别是未提交读、已提交读、可重复读、可序列化。而在 spring 事务中提供了 5 种隔离级别来对应在 SQL 中定义的 4 种隔离级别，如下：
+
+| 隔离级别                   | 意义                                                    |
+| ------------------------------ | ------------------------------------------------------------ |
+| ISOLATION_DEFAULT          | 使用后端数据库默认的隔离级别                             |
+| ISOLATION_READ_UNCOMMITTED | 允许读取未提交的数据（对应未提交读），可能导致脏读、不可重复读、幻读 |
+| ISOLATION_READ_COMMITTED   | 允许在一个事务中读取另一个已经提交的事务中的数据（对应已提交读）。可以避免脏读，但是无法避免不可重复读和幻读 |
+| ISOLATION_REPEATABLE_READ  | 一个事务不可能更新由另一个事务修改但尚未提交（回滚）的数据（对应可重复读）。可以避免脏读和不可重复读，但无法避免幻读 |
+| ISOLATION_SERIALIZABLE     | 这种隔离级别是所有的事务都在一个执行队列中，依次顺序执行，而不是并行（对应可序列化）。可以避免脏读、不可重复读、幻读。但是这种隔离级别效率很低，因此，除非必须，否则不建议使用。 |
+
+### 只读
+
+事务的只读属性是指，对事务性资源进行只读操作或者是读写操作。所谓事务性资源就是指那些被事务管理的资源，比如数据源、 JMS 资源，以及自定义的事务性资源等等。如果确定只对事务性资源进行只读操作，那么我们可以将事务标志为只读的，以提高事务处理的性能。在 TransactionDefinition 中以 boolean 类型来表示该事务是否只读。
+
+### 事务超时
+
+所谓事务超时，就是指一个事务所允许执行的最长时间，如果超过该时间限制但事务还没有完成，则自动回滚事务。在 TransactionDefinition 中以 int 的值来表示超时时间，其单位是秒。
+
+### 回滚原则
+
+这些规则定义了哪些异常会导致事务回滚而哪些不会。默认情况下，事务只有遇到运行期异常时才会回滚，而在遇到检查型异常时不会回滚（这一行为与EJB的回滚行为是一致的）。 但是你可以声明事务在遇到特定的检查型异常时像遇到运行期异常那样回滚。同样，你还可以声明事务遇到特定的异常不回滚，即使这些异常是运行期异常。
+
+### 事务实现
+
+- DataSourceTransactionManager：适用于使用JDBC和iBatis进行数据持久化操作的情况。
+- HibernateTransactionManager：适用于使用Hibernate进行数据持久化操作的情况。
+- JpaTransactionManager：适用于使用JPA进行数据持久化操作的情况。
+- 另外还有JtaTransactionManager 、JdoTransactionManager、JmsTransactionManager等等。
+
+```java
+public class DataSourceTransactionManager extends AbstractPlatformTransactionManager
+		implements ResourceTransactionManager, InitializingBean {//java实现
+    //模板方法中调用，AbstractPlatformTransactionManager调用
+    @Override
+	protected void doCommit(DefaultTransactionStatus status) {
+		DataSourceTransactionObject txObject = (DataSourceTransactionObject) status.getTransaction();
+		Connection con = txObject.getConnectionHolder().getConnection();
+		if (status.isDebug()) {
+			logger.debug("Committing JDBC transaction on Connection [" + con + "]");
+		}
+		try {
+			con.commit();//调用数据库来提交
+		}
+		catch (SQLException ex) {
+			throw new TransactionSystemException("Could not commit JDBC transaction", ex);
+		}
+	}
+}
+    
+```
+
+使用事务(原理) 底层原理：**动态代理** ：
 
 ```java
 //获取数据库连接  
@@ -426,7 +568,7 @@ con.commit() / con.rollback()
 conn.close()
 ```
 
-底层原理：**动态代理** 
+
 
 ## 注解
 

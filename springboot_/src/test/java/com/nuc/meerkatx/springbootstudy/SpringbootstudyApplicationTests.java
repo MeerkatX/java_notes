@@ -31,7 +31,9 @@ class SpringbootstudyApplicationTests {
 
     @Test
     void test() throws JsonProcessingException {
-        User user = new User("xx", 1);
+        User user = new User();
+        user.setName("xx");
+        user.setAge(1);
         String jsonUser = new ObjectMapper().writeValueAsString(user);
         redisTemplate.opsForValue().set("user", user);//配置RedisConfig 序列化手段最后就可以直接序列化 user为json
         System.out.println(redisTemplate.opsForValue().get("user"));

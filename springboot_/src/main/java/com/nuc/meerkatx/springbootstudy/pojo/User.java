@@ -4,6 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.TransactionDefinition;
 
 /**
  * @Auther: 徐少伟
@@ -15,6 +16,8 @@ import org.springframework.stereotype.Component;
 @NoArgsConstructor
 @Data
 public class User {
+
+    private int id;
 
     private String name;
 

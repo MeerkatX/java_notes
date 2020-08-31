@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.nuc.meerkatx.springbootstudy.mapper.UserMapper">
+
+    <resultMap type="User" id="UserResult">
+        <result property="id" column="id"/>
+        <result property="name" column="name"/>
+        <result property="age" column="age"/>
+    </resultMap>
+
+    <sql id="selectUserVo">
+        select id,`name`,age from `user`
+    </sql>
+
+    <select id="selectUserById" parameterType="Integer" resultMap="UserResult">
+        <include refid="selectUserVo"/>
+        where id = #{id}
+    </select>
+
+</mapper>

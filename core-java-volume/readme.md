@@ -358,9 +358,19 @@ Handler处理器：与IO事件（或者选择键）绑定，负责IO事件的处
 （1）将负责输入输出处理的`IOHandler`处理器的执行，放入独立的线程池中。这样，业务处理线程与负责服务监听和IO事件查询的反应器线程相隔离，避免服务器的连接监听受到阻塞。
 （2）如果服务器为多核的CPU，可以将反应器线程拆分为多个子反应器`（SubReactor）`线程；同时，引入多个选择器，每一个`SubReactor`子线程负责一个选择器。这样，充分释放了系统资源的能力；也提高了反应器管理大量连接，提升选择大量通道的能力。
 
+### Proactor模式
+
+AIO基于Proactor实现，加入了监听处理器Handler。
+
+1. 应用程序在事件分离器上注册“读完成事件”和“读完成事件处理器”，并向操作系统发出异步读请求。
+2. 事件分离器会等待操作系统完成读取。
+3. 在操作系统完成数据的读取并将结果数据存入用户自定义缓冲区后会通知事件分离器读操作完成。
+4. 事件分离器监听到“读完成事件”后会激活“读完成事件的处理器”。
+5. 读完成事件处理器此时就可以把读取到的数据提供给应用程序使用。
+
 ## 细节
 
-### 栈（运算）
+### 操作数栈 和 局部变量表
 
 [你真的了解 i++, ++i 和 i+++++i 以及 i+++i++ 吗？](http://blog.itpub.net/31561266/viewspace-2222093/)
 
@@ -373,6 +383,44 @@ System.out.println(i);
 ```
 
 [code](./src/main/java/MainTest.java)
+
+### Integer和 int
+
+```java
+Integer i01 = 59;
+int i02 = 59;
+Integer i03 =Integer.valueOf(59);
+Integer i04 = new Integer(59);
+```
+
+Integer i01=59 的时候，会调用 Integer 的 valueOf 方法，这个方法就是返回一个 Integer 对象，只是在返回之前，看作了一个判断，判断当前 i 的值是否在 [-128,127] 区别，且 IntegerCache 中是否存在此对象，如果存在，则直接返回引用，否则，创建一个新的对象。在这里的话，因为程序初次运行，没有 59 ，所以，直接创建了一个新的对象。
+
+```java
+  public static Integer valueOf(int i) {
+     assert IntegerCache.high>= 127;
+     if (i >= IntegerCache.low&& i <= IntegerCache.high)
+     return IntegerCache.***[i+ (-IntegerCache.low)];
+     return new Integer(i); 
+  }
+```
+
+```java
+int i02=59 ，这是一个基本类型，存储在栈中。
+
+Integer i03 =Integer.valueOf(59); 因为 IntegerCache 中已经存在此对象，所以，直接返回引用。
+
+Integer i04 = new Integer(59) ；直接创建一个新的对象。
+
+System.out.println(i01== i02); //i01 是 Integer 对象， i02 是 int ，这里比较的不是地址，而是值。 Integer 会自动拆箱成 int ，然后进行值的比较。所以，为真。
+
+System.out.println(i01== i03);//因为 i03 返回的是 i01 的引用，所以，为真。
+
+System.out.println(i03==i04);//因为 i04 是重新创建的对象，所以 i03,i04 是指向不同的对象，因此比较结果为假。
+
+System.out.println(i02== i04);//因为 i02 是基本类型，所以此时 i04 会自动拆箱，进行值比较，所以，结果为真。
+```
+
+注意自动拆箱。。。因为 i02 是基本类型，所以此时 i04 会**自动拆箱**，进行值比较
 
 
 ## proxy 动态代理
@@ -403,9 +451,99 @@ Java序列化必须实现Serializable接口，具体仅做标记用，其中@Tra
 
 ## Redis
 
+### java jedis
+
 [jedis](./src/main/java/jedis)
 
 ## JVM虚拟机
+
+内存划分：
+
+![image-20200830153954876](readme.assets/image-20200830153954876.png)
+
+### String.intern
+
+String “Flyweight” 设计模式
+
+提问 
+
+```java
+String s1 = "a" + new String("b");//共有4个对象，"a"，"b"在常量池中，new String("b")和 "ab" 在堆中创建
+
+String s2 = "ab" + "c";//转换为"abc"放入常量池 编译期
+
+String s3 = new String("abc");//堆中创建了"abc" 
+
+s3.intern();//将字符串abc放入到常量池中。 native方法，先判断当前字符串是否存在，存在就返回引用，不存在就创建后返回引用（JDK1.6）
+```
+
+jdk1.7之后修改常量池位置到堆中，intern方法相应做出变化：
+
+intern()方法会先查询字符串常量池是否存在当前字符串，若字符串常量池中不存在则再从堆中查询，然后存储并返回相关引用；若都不存在则将当前字符串复制到字符串常量池中，并返回字符串常量池中的引用。如果常量池中存在，就不做任何操作，直接返回常量池的引用值。
+
+```java
+String s1 = new String("a");//生成了两个对象，堆中String Object和常量池中"a"
+
+s1.intern();//首先去常量池中找，发现已经在常量池中，不做其他操作，返回常量池中引用值
+
+String s2 = new String("a") + new String("a");//常量池中只有"a"，堆中有"aa"
+
+s2.intern();//判断"aa"不在常量池，直接存储堆中的引用，这个引用指向s2引用的对象
+```
+
+这里：
+
+```java
+String s1 = new String("a") + new String("a");
+System.out.println(System.identityHashCode(s1));
+//一下两个互换位置，结果会不同，这也和JDK1.7有关
+s1.intern();//首先判断常量池中不存在"aa"，但是堆中存在，所以储存堆中引用并返回。 
+String s2 = "aa";//此时常量池中"aa"的引用即 s1的引用 666988784 
+
+System.out.println(System.identityHashCode(s1));
+System.out.println(System.identityHashCode(s2));
+System.out.println(s1 == s2);
+```
+
+666988784
+666988784
+666988784
+true
+
+```java
+String s2 = "aa";
+s1.intern();//这一句实际并不起作用 当然如果 s1 = s1.intern();将常量池中地址赋给s1结果就会为true
+```
+
+666988784
+666988784
+1414644648
+false(JDK 1.6 1.7都是false)
+
+### 类加载器
+
+启动类加载器、用户自定义类加载器 
+
+`BootStrap ClassLoader ` 加载rt.jar包下的class文件
+
+`Extension ClassLoader`
+
+`System ClassLoader` (`AppClassLoader`)
+
+`User-Defined ClassLoader`
+
+双亲委托机制：
+
+类加载时机（首次主动使用）：《深入理解Java虚拟机》p263
+
+加载 -> 连接（验证、准备、解析）-> 初始化 -> 使用 -> 卸载
+
+1. 遇到`new`、`getstatic`、`putstatic`、或 `invokestatic`指令时，如果类型没有初始化，触发初始化阶段（new实例化对象读取、设置一个类型的静态字段、调用一个类型的静态方法）
+2. 使用`java.lang.reflect`包（反射）的方法对类型进行反射调用的时候
+3. 初始化类的时候，发现父类还没初始化，先触发父类初始化
+4. 虚拟机启动时，主类 main 方法的类，虚拟机会先初始化该类、
+5. JDK7动态语言支持
+6. 接口定义了default方法，如果接口实现类初始化，接口也要初始化
 
 ### 垃圾收集器
 
@@ -704,14 +842,6 @@ public E poll() {
 
 当且仅当`hashCode`和`equals`对比一直的对象，才会被`HashMap`当做同一个对象
 
-##### Java7版本
-
-头插法，不能保证原有的顺序，会导致在多线程环境下形成一个环形链表，从而造成死锁
-
-单向链表数组
-
-长度始终保持**2的n次方**
-
 ```java
 transient Entry<K,V>[] table;//储存数据的核心成员变量
 
@@ -772,6 +902,14 @@ static class Node<K,V> implements Map.Entry<K,V> {
     }
 }
 ```
+
+##### Java7版本
+
+头插法，不能保证原有的顺序，会导致在多线程环境下形成一个环形链表，从而造成死锁
+
+单向链表数组
+
+长度始终保持**2的n次方**
 
 indexFor()
 
@@ -909,7 +1047,7 @@ final V putVal(int hash, K key, V value, boolean onlyIfAbsent,
     afterNodeInsertion(evict);
     return null;
 }
-
+//用于保存树结点
 final TreeNode<K,V> putTreeVal(HashMap<K,V> map, Node<K,V>[] tab,
                                        int h, K k, V v) {
             Class<?> kc = null;
@@ -917,6 +1055,7 @@ final TreeNode<K,V> putTreeVal(HashMap<K,V> map, Node<K,V>[] tab,
             TreeNode<K,V> root = (parent != null) ? root() : this;
             for (TreeNode<K,V> p = root;;) {
                 int dir, ph; K pk;
+                //二叉树查找，大于查找右子树，小于查找左子树
                 if ((ph = p.hash) > h)
                     dir = -1;
                 else if (ph < h)
@@ -950,6 +1089,8 @@ final TreeNode<K,V> putTreeVal(HashMap<K,V> map, Node<K,V>[] tab,
                     x.parent = x.prev = xp;
                     if (xpn != null)
                         ((TreeNode<K,V>)xpn).prev = x;
+                    //balanceInsertion平衡插入，将结点插入红黑树，并对红黑树做转换
+                    //moveRootToFront红黑树重新平衡后，root结点可能出现变化，重置root
                     moveRootToFront(tab, balanceInsertion(root, x));
                     return null;
                 }
@@ -957,13 +1098,13 @@ final TreeNode<K,V> putTreeVal(HashMap<K,V> map, Node<K,V>[] tab,
         }
 ```
 
-重构链表为树：
+##### 重构链表为树
 
 ```java
 final void treeifyBin(Node<K,V>[] tab, int hash) {
     int n, index; Node<K,V> e;
-    if (tab == null || (n = tab.length) < MIN_TREEIFY_CAPACITY)
-        resize();
+    if (tab == null || (n = tab.length) < MIN_TREEIFY_CAPACITY)//建树最小容量64
+        resize();//小于最小建树容量就扩容
     else if ((e = tab[index = (n - 1) & hash]) != null) {
         TreeNode<K,V> hd = null, tl = null;
         do {
@@ -982,12 +1123,88 @@ final void treeifyBin(Node<K,V>[] tab, int hash) {
 }
 ```
 
-resize扩容
+“最小建树容量” 这个常量存在的意义在于：
+重新规划table大小和树化某个哈希桶（哈希值对应下标位置的容器），这两种方式都可以提高查询效率，那么，如何在这两种方式之间就需要某个平衡点呢？
+如果有大量结点堆积在某个哈希桶里，那么应该倾向于重新规划table大小，但是当table足够小时，大量结点堆积的情况较为常见，因此，这里取了一个**经验数字64**作为衡量。
+如果table容量超出64，那么调用`TreeNode.treeify`方法把链表转化为红黑树
+
+```java
+//root代表根节点，x代表插入节点，返回值为新根节点
+//xp 父结点 xpp 父结点的父结点（祖父结点） xppl 父结点的父结点的左子节点（叔结点/父结点） xppr 父结点的父结点的右子结点（叔结点/父结点）用 xp == xppl 和 xp==xppr 来确定
+static <K,V> TreeNode<K,V> balanceInsertion(TreeNode<K,V> root,
+                                            TreeNode<K,V> x) {
+    x.red = true;
+    for (TreeNode<K,V> xp, xpp, xppl, xppr;;) {
+        if ((xp = x.parent) == null) {
+            //没有父节点，则插入的是根节点，所以设置为黑色 false
+            x.red = false;
+            return x;
+        }
+        else if (!xp.red || (xpp = xp.parent) == null)
+            //父节点为黑色，无序旋转直接返回根节点
+            //父节点为红色，这祖父节点xpp 不能为null ，仅执行了xpp赋值
+            return root;
+        //父结点在祖父结点左侧 左连接
+        if (xp == (xppl = xpp.left)) {
+            //叔结点为红色
+            if ((xppr = xpp.right) != null && xppr.red) {
+                xppr.red = false;
+                xp.red = false;
+                xpp.red = true;
+                x = xpp;
+            }
+            //没有叔结点，或叔结点为黑色
+            else {
+                if (x == xp.right) {//结点在父节点左侧，左旋
+                    root = rotateLeft(root, x = xp);
+                    xpp = (xp = x.parent) == null ? null : xp.parent;
+                }
+                //如果没有上一步左旋，xp必然不为null，（x==xp.left）执行右旋
+                //如果进行过上一步左旋，如果xp不为null，需要右旋
+                if (xp != null) {
+                    xp.red = false;
+                    if (xpp != null) {
+                        xpp.red = true;
+                        root = rotateRight(root, xpp);
+                    }
+                }
+            }
+        }
+        //父结点在祖父结点右侧 右链接
+        else {
+            //叔结点为红
+            if (xppl != null && xppl.red) {
+                xppl.red = false;
+                xp.red = false;
+                xpp.red = true;
+                x = xpp;
+            }
+            //没有叔结点情况
+            else {
+                if (x == xp.left) {
+                    root = rotateRight(root, x = xp);
+                    xpp = (xp = x.parent) == null ? null : xp.parent;
+                }
+                if (xp != null) {
+                    xp.red = false;
+                    if (xpp != null) {
+                        xpp.red = true;
+                        root = rotateLeft(root, xpp);
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+##### resize扩容
 
 1. 重新规划table长度和阈值，它主要遵循以下的逻辑：
    - 当数据数量（size）超出扩容阈值时，进行扩容：把table的容量增加到旧容量的**两倍**。
    - 如果新的table容量小于默认的初始化容量16，那么将table容量重置为16，阈值重新设置为新容量和加载因子（默认0.75）之积。
    - 如果新的table容量超出或等于最大容量（1<<30），那么**将阈值调整为最大整型数**，并且return，终止整个resize过程。注意，由于size不可能超过最大整型数，所以之后不会再触发扩容。
+   
 2. 重新排列数据结点，该操作遍历table上的每一个结点，对它们分别进行处理：
    - 如果结点为null，那么不进行处理。
    - 如果结点不为null且没有next结点，那么重新计算该结点的hash值，存入新的table中。
@@ -995,6 +1212,7 @@ resize扩容
    - 如果以上条件都不满足，那么说明结点为链表结点。根据hashcode计算出来的下标不会超出table容量，超出的位数会被设为0，而resize进行扩容后，table容量发生了变化，同一个链表里有部分结点的下标也应当发生变化。所以，需要把链表拆成两部分，分别为hashCode超出旧容量的链表和未超出容量的链表。对于hash&oldCap==0的部分，不需要做处理；反之，则需要被存放到新的下标位置上，公式如下所示：
      **新下标=原下标+旧容量**；
      该等式是个巧算，利用了位运算以及容量必然是2的指数的特性。
+
 
 ```java
 final Node<K,V>[] resize() {
@@ -1079,3 +1297,29 @@ final Node<K,V>[] resize() {
     return newTab;
 }
 ```
+
+### TreeMap
+
+完全由红黑树实现
+
+```java
+private final Comparator<? super K> comparator;//比较器
+
+private transient Entry<K,V> root;//根节点
+
+private transient int size = 0;//树中包含节点数目
+```
+
+#### LinkedHashMap
+
+可以参考leetcode中LRU算法实现
+
+```java
+transient LinkedHashMap.Entry<K,V> head;//双向链表头，最旧的结点
+
+transient LinkedHashMap.Entry<K,V> tail;//双向链表尾，最新的结点
+
+final boolean accessOrder;//迭代顺序
+```
+
+![image-20200826113624267](readme.assets/image-20200826113624267.png)

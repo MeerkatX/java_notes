@@ -15,7 +15,7 @@ import javax.servlet.http.HttpServletResponse;
 @Slf4j
 public class MyInterceptor implements HandlerInterceptor {
 
-    //return true 放心，执行下一个拦截器，false 不执行拦截器
+    //return true 放行，执行下一个拦截器，false 不执行拦截器
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
         log.info("==============处理前================");
