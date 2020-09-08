@@ -5,9 +5,22 @@ import java.util.HashMap;
 /**
  * @Auther: 徐少伟
  * @Date: 2020/6/8
- * @Description:
+ * @Description: 138. 复制带随机指针的链表
+ * https://leetcode-cn.com/problems/copy-list-with-random-pointer/
  */
 public class CopyRandomList {
+    static class Node {
+        int val;
+        Node next;
+        Node random;
+
+        public Node(int val) {
+            this.val = val;
+            this.next = null;
+            this.random = null;
+        }
+    }
+
     public static void main(String[] args) {
         Node n1 = new Node(7);
         Node n2 = new Node(13);
@@ -24,7 +37,7 @@ public class CopyRandomList {
 
         new CopyRandomList().copyRandomList(n1);
     }
-
+    //最初自己写的版本
     public Node copyRandomList(Node head) {
         HashMap<Integer, Node> map = new HashMap<>();
         Node point = head;
@@ -56,10 +69,10 @@ public class CopyRandomList {
         }
         return fhead.next;
     }
-
+    //答案优化版本
     public Node copyRandomList2(Node head) {
         if (head == null) return null;
-        HashMap<Node, Node> map = new HashMap<>();
+        HashMap<Node, Node> map = new HashMap<>();//通过Map来实现查找
         Node p = head;
         while (p != null) {
             map.put(p, new Node(p.val));
@@ -75,14 +88,3 @@ public class CopyRandomList {
     }
 }
 
-class Node {
-    int val;
-    Node next;
-    Node random;
-
-    public Node(int val) {
-        this.val = val;
-        this.next = null;
-        this.random = null;
-    }
-}

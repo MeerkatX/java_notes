@@ -5,7 +5,8 @@ import java.util.List;
 /**
  * @Auther: 徐少伟
  * @Date: 2020/4/22
- * @Description:
+ * @Description: 15. 三数之和
+ * https://leetcode-cn.com/problems/3sum/
  */
 public class ThreeSum {
     public static void main(String[] args) {

@@ -3,7 +3,7 @@ package list;
 /**
  * @Auther: 徐少伟
  * @Date: 2020/4/26
- * @Description: 翻转列表 递归
+ * @Description: 206. 反转链表 翻转列表 递归
  * https://leetcode-cn.com/problems/reverse-linked-list/solution/fan-zhuan-lian-biao-by-leetcode/
  */
 public class ReverseList {

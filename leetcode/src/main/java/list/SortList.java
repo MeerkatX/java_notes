@@ -3,7 +3,9 @@ package list;
 /**
  * @Auther: 徐少伟
  * @Date: 2020/5/1
- * @Description:
+ * @Description: 148. 排序链表
+ * 在 O(n log n) 时间复杂度和常数级空间复杂度下，对链表进行排序。
+ * https://leetcode-cn.com/problems/sort-list/submissions/
  */
 public class SortList {
 
@@ -30,7 +32,7 @@ public class SortList {
             length++;
         }
         tail = head;
-        for (int i = 0; i < length / 2-1; i++) {
+        for (int i = 0; i < length / 2 - 1; i++) {
             tail = tail.next;
         }
         ListNode h1 = head;

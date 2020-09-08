@@ -3,7 +3,8 @@ package list;
 /**
  * @Auther: 徐少伟
  * @Date: 2020/5/25
- * @Description:
+ * @Description: 147. 对链表进行插入排序
+ * https://leetcode-cn.com/problems/insertion-sort-list/
  */
 public class InsertionSortList {
     public static void main(String[] args) {
@@ -24,6 +25,7 @@ public class InsertionSortList {
         while (point != null) {
             ListNode h = head;
             ListNode pre = h;
+            //插入位置
             while (h != null && h.val <= point.val) {
                 pre = h;
                 h = h.next;

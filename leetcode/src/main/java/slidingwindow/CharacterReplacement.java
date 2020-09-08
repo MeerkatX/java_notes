@@ -3,7 +3,12 @@ package slidingwindow;
 /**
  * @Auther: 徐少伟
  * @Date: 2020/5/25
- * @Description:
+ * @Description: 424. 替换后的最长重复字符
+ * 给你一个仅由大写英文字母组成的字符串，你可以将任意位置上的字符替换成另外的字符，
+ * 总共可最多替换 k 次。
+ * 在执行上述操作后，找到包含重复字母的最长子串的长度。
+ * 2021校招哔哩哔哩
+ * https://leetcode-cn.com/problems/longest-repeating-character-replacement/
  */
 public class CharacterReplacement {
 
@@ -38,7 +43,6 @@ public class CharacterReplacement {
                     right = pos;
                     f2 = true;
                     n = k;
-
                 }
             }
         }

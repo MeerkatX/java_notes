@@ -6,7 +6,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * @Auther: 徐少伟
  * @Date: 2020/5/29
- * @Description:
+ * @Description: 83. 删除排序链表中的重复元素
+ * https://leetcode-cn.com/problems/remove-duplicates-from-sorted-list/
  */
 public class DeleteDuplicates {
 
@@ -50,7 +51,7 @@ public class DeleteDuplicates {
         if (head == null || head.next == null) {
             return head;
         }
-        ListNode dummy = new ListNode(-1);
+        ListNode dummy = new ListNode(-1);//需要一个头
         dummy.next = head;
         ListNode a = dummy;
         ListNode b = head;
