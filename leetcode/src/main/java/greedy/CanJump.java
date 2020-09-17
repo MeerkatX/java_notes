@@ -1,9 +1,10 @@
-package dp;
+package greedy;
 
 /**
  * @Auther: 徐少伟
  * @Date: 2020/5/4
- * @Description:
+ * @Description: 55. 跳跃游戏
+ * https://leetcode-cn.com/problems/jump-game/
  */
 public class CanJump {
 

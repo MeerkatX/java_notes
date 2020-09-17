@@ -573,7 +573,15 @@ false(JDK 1.6 1.7都是false)
 
 ##### 安全点
 
+### 字节码
 
+#### 方法调用
+
+- invokestatic　　//调用静态方法
+- invokespecial　　//调用私有方法、实例构造器方法、父类方法
+- invokevirtual　　//调用实例方法
+- invokeinterface　　//调用接口方法，会在运行时再确定一个实现此接口的对象
+- invokedynamic　　//先在运行时动态解析出调用点限定符所引用的方法，然后再执行该方法，在此之前的4条调用指令，分派逻辑是固化在java虚拟机内部的，而invokedynamic指令的分派逻辑是由用户所设定的引导方法决定的。（lambda底层，JDK1.7新增）
 
 ## Collection框架
 
@@ -1323,3 +1331,7 @@ final boolean accessOrder;//迭代顺序
 ```
 
 ![image-20200826113624267](readme.assets/image-20200826113624267.png)
+
+## Lambda底层实现
+
+[Java8 lambda 底层实现原理](http://www.victorchu.info/posts/95e4137a.html)

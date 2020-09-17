@@ -1,5 +1,7 @@
 # Linux
 
+## 目录
+
 `/etc` 配置文件所在目录 
 
 `/proc` 存储的是当前内核运行状态的一系列特殊文件，用户可以通过这些文件查看有关系统硬件及当前正在运行进程的信息，甚至可以通过更改其中某些文件来改变内核的运行状态。(是伪文件系统，虚拟文件，存在内存中)
@@ -41,6 +43,26 @@
 `/dev` 存放Linux系统使用的所有外部设备
 
 `/boot` 存放Linux启动文件和内核
+
+----
+
+## 命令
+
+### chmod
+
+Linux/Unix 的文件调用权限分为三级 : 文件所有者（Owner）、用户组（Group）、其它用户（Other Users）
+
+![img](linux.assets/file-permissions-rwx.jpg)
+
+```bash
+meerkatx@ubuntu:~$ chmod --- 目录、文件
+```
+
+R = 4
+
+W = 2
+
+X = 1
 
 ## bash
 
@@ -438,7 +460,7 @@ meerkatx@ubuntu:~/Desktop$ last | tee last.list | cut -d " " -f1
 meerkatx@ubuntu:~/Desktop$ tar -cvf - /home | tar -xvf 
 ```
 
-
+---
 
 ## Vim
 

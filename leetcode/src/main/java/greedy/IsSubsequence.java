@@ -1,4 +1,4 @@
-
+package greedy;
 
 /**
  * @Auther: 徐少伟

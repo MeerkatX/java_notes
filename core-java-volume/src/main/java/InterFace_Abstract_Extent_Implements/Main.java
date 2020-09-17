@@ -13,7 +13,7 @@ public class Main {
         // 但是如果是这种情况必须将 超类方法的 具体方法改为 public 因为可以通过
         // 接口访问该方法，而接口中所有方法访问权限为 public 会通不过编译
 
-        FatherNotAbs son0 = new Son("son desc");
+        Son son0 = new Son("son desc");
         son0.speakDesc();
         son0.speakName();// 调用父类方法，就用的是父类的name 即变量没有多态 （子类重新定义了public String name）
         son0.speakAge();

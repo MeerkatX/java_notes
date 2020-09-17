@@ -17,6 +17,10 @@ public abstract class Father {
         return name;
     }
 
+//    public Father(String n){
+//        name = n;//如果子类没有调用该方法的话，无法编译
+//    }
+
 //    String getName(){
 //        return name;
 //    }

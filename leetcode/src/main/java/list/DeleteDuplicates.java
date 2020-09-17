@@ -19,9 +19,9 @@ public class DeleteDuplicates {
         ListNode l1 = new ListNode(1);
         ListNode l2 = new ListNode(2);
         ListNode l3 = new ListNode(2);
-        l1.next = l2;
-        l2.next = l3;
-        new DeleteDuplicates().deleteDuplicates(l1);
+//        l1.next = l2;
+//        l2.next = l3;
+        new DeleteDuplicates().deleteDuplicates3(l1);
     }
 
     public ListNode deleteDuplicates(ListNode head) {
@@ -73,5 +73,28 @@ public class DeleteDuplicates {
             }
         }
         return dummy.next;
+    }
+
+    public ListNode deleteDuplicates3(ListNode head) {
+        // write code here
+        if(head == null) return head;
+        ListNode fake = new ListNode(0);
+        ListNode p = fake;
+        ListNode slow = head;
+        ListNode fast = head;
+        while (fast != null) {
+            //如果两者相等，就往后移动
+            while (fast!=null &&  fast.val == slow.val) {
+                fast= fast.next;
+            }
+            //如果只移动了一格（next = fast）说明是独一无二的元素
+            if(slow.next == fast){
+                p.next = slow;
+                p = p.next;
+            }
+            slow = fast;//继续往后比较
+        }
+        p.next = slow;//最后一个元素无法比较，单独处理
+        return fake.next;
     }
 }

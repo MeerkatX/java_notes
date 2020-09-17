@@ -25,6 +25,7 @@ public class PostorderTraversal {
         while (!stack.isEmpty()) {
             TreeNode node = stack.pollLast();
             output.addFirst(node.val);//头插
+            //根 右 左的顺序，所以先往栈中加入左（这样出栈就是右先出）
             if (node.left != null) {
                 stack.add(node.left);
             }

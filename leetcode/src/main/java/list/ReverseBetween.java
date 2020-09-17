@@ -18,6 +18,9 @@ public class ReverseBetween {
         for (int i = 0; i < m - 1; i++) p = p.next;
         ListNode q = p.next;
         for (int i = 0; i < n - m; i++) {
+            //这一块比较复杂
+            // 其实就是 1->2->3->4->5 变成 1->3->2->4->5
+            // 循环再变成 1 -> 4 -> 3 -> 2 -> 5这样，其中指向2的指针是不变的，即q是不变的。
             ListNode t = q.next;
             q.next = q.next.next;
 
@@ -25,6 +28,30 @@ public class ReverseBetween {
             p.next = t;
         }
         return h.next;
+    }
+
+    public ListNode reverseBetween_ (ListNode head, int m, int n) {
+        // write code here
+        ListNode preHead = new ListNode(0);
+        preHead.next = head;
+        ListNode start = head;
+        ListNode preStart = preHead;
+        for (int i = 1; i < m; i++) {
+            preStart = start;
+            start = start.next;
+        }
+
+        for (int i = 0; i < n - m; i++) {
+            //这一块比较复杂
+            // 其实就是 1->2->3->4->5 变成 1->3->2->4->5
+            // 循环再变成 1 -> 4 -> 3 -> 2 -> 5这样，其中指向2的指针是不变的
+            ListNode temp = start.next;
+            start.next = temp.next;
+            temp.next = preStart.next;
+            preStart.next = temp;
+        }
+        return preHead.next;
+
     }
 
     //不合规的非一趟扫描
