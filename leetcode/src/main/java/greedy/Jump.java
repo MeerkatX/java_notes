@@ -9,6 +9,6 @@ package greedy;
  */
 public class Jump {
     public int jump(int[] nums) {
-
+        return 1;
     }
 }

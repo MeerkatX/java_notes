@@ -453,7 +453,10 @@ Java序列化必须实现Serializable接口，具体仅做标记用，其中@Tra
 
 ### java jedis
 
-[jedis](./src/main/java/jedis)
+[jedis](./src/main/java/jedis) 阻塞IO
+
+[lettuce]() Netty实现的非阻塞IO
+
 
 ## JVM虚拟机
 
@@ -573,6 +576,173 @@ false(JDK 1.6 1.7都是false)
 
 ##### 安全点
 
+- 循环的末尾
+- 方法返回前
+- 调用方法的 call 之后
+- 抛出异常的位置
+
+#### JVM运行时内存
+
+![image-20200921094412177](readme.assets/image-20200921094412177.png)
+
+新生代和老年代默认比例 $1:2$，新生代分为Eden区，S0（from survivor）区，S1（to Survivor）区，比例为$8:1:1$
+
+新生代GC Minor GC 老年代GC Major GC (Old GC、Full GC)
+
+默认晋升老年代阈值为15 `XX:MaxTenuringThreshold` 进行设置
+
+大对象直接复制到老年代 `XX:PretenureSize` 进行设置
+
+##### Eden、S0、S1
+
+**复制**
+
+大部分对象在短时间内都会被回收, 所以经过 Minor GC 后只有少部分对象会存活，它们会被移到 S0 区（这就是为啥空间大小  Eden: S0: S1 = 8:1:1, Eden 区远大于 S0,S1 的原因，因为在 Eden 区触发的 Minor GC 把大部对象（接近98%）都回收了,只留下少量存活的对象，此时把它们移到 S0 或 S1 绰绰有余）同时对象年龄加一（对象的年龄即发生 Minor GC 的次数），最后把 Eden 区对象全部清理以释放出空间
+
+当触发下一次 Minor GC 时，会把 Eden 区的存活对象和 S0（或S1） 中的存活对象（S0 或 S1 中的存活对象经过每次 Minor GC 都可能被回收）一起移到 S1（Eden 和 S0 的存活对象年龄+1）, 同时清空 Eden 和 S0 的空间。
+
+若再触发下一次 Minor GC，则重复上一步，只不过此时变成了 从 Eden，S1 区将存活对象复制到 S0 区,每次垃圾回收, S0, S1 角色互换，都是从 Eden ,S0(或S1) 将存活对象移动到 S1(或S0)。
+
+##### 老年代
+
+**标记清除**
+
+容易产生内存碎片，耗时较长
+
+##### 元空间
+
+元数据区并没有使用虚拟机的内存，而是直接使用操作系统的本地内存。因此，元空间的大小不受JVM内存的限制，只和操作系统的内存有关。
+
+在Java 8中，JVM将类的元数据放入本地内存（Native Memory）中，将**常量池和类的静态变量放入Java堆**中，这样JVM能够加载多少元数据信息就不再由JVM的最大可用内存（MaxPermSize）空间决定，而由操作系统的实际可用内存空间决定。
+
+![220](readme.assets/220.png)
+
+-----
+
+#### 收集器
+
+![1230](readme.assets/1230.webp)
+
+新生代：
+
+Serial（单线程复制算法）、ParNew（多线程复制算法）、Parallel Scavenge（多线程复制算法）
+
+老年代：
+
+CMS（多线程标记清除算法）、Serial Old（单线程标记整理算法）、Parallel Old（多线程标记整理算法）
+
+新生代+老年代：
+
+G1（多线程标记整理算法）
+
+------
+
+> 新生代收集器
+
+##### Serial 
+
+Serial 收集器是工作在**新生代**的，**单线程**，**复制算法**实现的垃圾收集器，单线程意味着它只会使用一个 CPU 或一个收集线程来完成垃圾回收，不仅如此，还记得我们上文提到的 STW 了吗，它在进行垃圾收集时，其他用户线程会暂停，直到垃圾收集结束，也就是说在 GC 期间，此时的应用不可用。
+
+运行在 **Client 模式 ** 下的虚拟机，Serial 收集器是新生代的默认收集器
+
+----
+
+##### ParNew
+
+ParNew 收集器是 Serial 收集器的**多线程**版本，基于**复制算法**实现。除了使用多线程，其他像收集算法,STW,对象分配规则，回收策略与 Serial 收集器完成一样，在底层上，这两种收集器也共用了相当多的代码。主要工作在Server模式下，并且**只有ParNew和Serial可以和CMS**老年代收集器配合工作
+
+-----
+
+##### Parallel Scavenge
+
+**多线程**、**复制算法** 为提高新生代垃圾收集效率设计，在系统吞吐量上有很大优化，更高效利用CPU
+
+CMS 等垃圾收集器关注的是尽可能缩短垃圾收集时用户线程的停顿时间，而 Parallel Scavenge 目标是达到一个可控制的吞吐量，也就是说 CMS 等垃圾收集器更适合用到与用户交互的程序，因为停顿时间越短，用户体验越好，而 Parallel Scavenge 收集器关注的是吞吐量，所以更适合做后台运算等不需要太多用户交互的任务。
+
+$吞吐量=运行用户代码时间/(运行用户代码时间+垃圾收集时间)$
+
+最大垃圾收集时间 `-XX:MaxGCPauseMillis` 
+
+直接设置吞吐量大小 `-XX:GCTimeRatio`（默认99%）
+
+自适应策略 `XX:UseAdaptiveSizePolicy` 开启这个参数后，就不需要手工指定新生代大小,Eden 与 Survivor 比例（SurvivorRatio）等细节，只需要设置好基本的堆大小（-Xmx 设置最大堆）,以及最大垃圾收集时间与吞吐量大小，虚拟机就会根据当前系统运行情况收集监控信息，动态调整这些参数以尽可能地达到我们设定的最大垃圾收集时间或吞吐量大小这两个指标。
+
+-----
+
+> 老年代收集器
+
+##### Serial Old
+
+Serial Old 是工作于老年代的**单线程**收集器，采用**标记整理**算法，**Client **模式下老年代默认收集器
+
+Server 模式下，则它还有两大用途：一种是在 JDK 1.5 及之前的版本中与 Parallel Scavenge 配合使用，另一种是作为 CMS 收集器的后备预案,在并发收集发生 Concurrent Mode Failure 时使用
+
+
+-----
+
+##### Parallel Old
+
+多线程、标记整理算法实现，优先考虑系统吞吐量，Parallel Scavenge收集器的老年代版本。通常和 Parallel Scavenge 共同使用
+
+------
+
+##### CMS
+
+concurrent mark sweep，为老年代设计，目标达到最短垃圾回收停顿时间（STW），基于线程的标记清除算法实现。
+
+初始标记、并发标记、重新标记、并发清除
+
+1. 初始标记：只标记和GC Roots直接关联的对象，速度很快，**需要暂停所有工作线程** 。
+
+2. 并发标记：和用户线程一起工作，执行GC Roots跟踪标记过程，**不需要暂停工作线程** 。
+3. 重新标记：在并发标记过程中用户线程继续运行，导致在垃圾回收过程中部分对象的状态发生变化，为了确保这部分对象的状态正确性，需要对其重新标记并 **暂停工作线程**。
+4. 并发清除：和用户线程一起工作，执行清除GC Roots不可达对象的任务，不需要暂停工作线程。
+
+![cms](readme.assets/cms.webp)
+
+- CMS 收集器对 CPU 资源非常敏感  原因也可以理解，比如本来我本来可以有 10 个用户线程处理请求，现在却要分出 3 个作为回收线程，吞吐量下降了30%，CMS 默认启动的回收线程数是 （CPU数量+3）/ 4, 如果 CPU 数量只有一两个，那吞吐量就直接下降 50%,显然是不可接受的
+- CMS 无法处理浮动垃圾（Floating Garbage）,可能出现 「Concurrent Mode Failure」而导致另一次 Full GC 的产生，由于在并发清理阶段用户线程还在运行，所以清理的同时新的垃圾也在不断出现，这部分垃圾只能在下一次 GC 时再清理掉（即浮云垃圾），同时在垃圾收集阶段用户线程也要继续运行，就需要预留足够多的空间要确保用户线程正常执行，这就意味着 CMS 收集器不能像其他收集器一样等老年代满了再使用，JDK 1.5 默认当老年代使用了68%空间后就会被激活，当然这个比例可以通过 -XX:CMSInitiatingOccupancyFraction 来设置，但是如果设置地太高很容易导致在 CMS 运行期间预留的内存无法满足程序要求，会导致 **Concurrent Mode Failure** 失败，这时会启用 Serial Old 收集器来重新进行老年代的收集，而我们知道 Serial Old 收集器是单线程收集器，这样就会导致 STW 更长了。
+- CMS 采用的是标记清除法，上文我们已经提到这种方法会产生大量的内存碎片，这样会给大内存分配带来很大的麻烦，如果无法找到足够大的连续空间来分配对象，将会触发 Full GC，这会影响应用的性能。当然我们可以开启 -XX:+UseCMSCompactAtFullCollection（默认是开启的），用于在 CMS 收集器顶不住要进行 FullGC 时开启内存碎片的合并整理过程，内存整理会导致 STW，停顿时间会变长，还可以用另一个参数 -XX:CMSFullGCsBeforeCompation 用来设置执行多少次不压缩的 Full GC 后跟着带来一次带压缩的。
+
+------
+
+> 新生代+老年代
+
+##### G1（Garbage First）
+
+- 像 CMS 收集器一样，能与应用程序线程并发执行。
+- 整理空闲空间更快。
+- 需要 GC 停顿时间更好预测。
+- 不会像 CMS 那样牺牲大量的吞吐性能。
+- 不需要更大的 Java Heap
+
+与CMS相比
+
+- 运作期间不会产生内存碎片，G1 从整体上看采用的是**标记-整理**法，局部（两个 **Region**）上看是基于**复制算法**实现的，两个算法都**不会产生内存碎片**，收集后提供规整的可用内存，这样有利于程序的长时间运行。
+- 在 STW 上建立了**可预测**的停顿时间模型，用户可以指定期望停顿时间，G1 会将停顿时间控制在用户设定的停顿时间以内。
+
+G1 各代的存储地址不是连续的，每一代都使用了 n 个不连续的大小相同的 Region，每个Region占有一块连续的虚拟内存地址。除了和传统的新老生代，幸存区的空间区别，Region还多了一个H，它代表Humongous，这表示这些Region存储的是巨大对象（humongous object，H-obj），即大小大于等于region一半的对象，这样超大对象就直接分配到了老年代，防止了反复拷贝移动。
+
+传统的收集器如果发生 Full GC 是对整个堆进行全区域的垃圾收集，而分配成各个 Region 的话，方便 G1 跟踪各个 Region 里垃圾堆积的价值大小（回收所获得的空间大小及回收所需经验值），这样根据价值大小维护一个优先列表，根据允许的收集时间，优先收集回收价值最大的 Region,也就避免了整个老年代的回收，也就减少了 STW 造成的停顿时间。同时由于只收集部分 Region,可就做到了 STW 时间的可控。
+
+![g1](readme.assets/g1.webp)
+
+垃圾收集步骤：
+
+初始标记、并发标记、最终标记、筛选回收
+
+与CMS类似，筛选阶段会根据各个Region的回收价值和成本进行排序，根据用户期望的GC停顿时间来制定回收计划
+
+![g11](readme.assets/g11.png)
+
+------
+
+##### ZGC
+
+
+
+----
+
 ### 字节码
 
 #### 方法调用
@@ -584,6 +754,32 @@ false(JDK 1.6 1.7都是false)
 - invokedynamic　　//先在运行时动态解析出调用点限定符所引用的方法，然后再执行该方法，在此之前的4条调用指令，分派逻辑是固化在java虚拟机内部的，而invokedynamic指令的分派逻辑是由用户所设定的引导方法决定的。（lambda底层，JDK1.7新增）
 
 ## Collection框架
+
+### fail-fast和fail-safe
+
+[快速失败机制&失败安全机制](https://juejin.im/post/6844904046617182215)
+
+#### fail-fast
+
+**现象**：在用迭代器遍历一个集合对象时，如果遍历过程中对集合对象的内容进行了增加、删除、修改操作，则会抛出`ConcurrentModificationException`。
+
+**原理**：迭代器在遍历时直接访问集合中的内容，并且在遍历过程中使用一个 `modCount` 变量。集合在被遍历期间如果内容发生变化，就会改变`modCount`的值。每当迭代器使用`hashNext()/next()`遍历下一个元素之前，都会检测`modCount`变量是否为`expectedmodCount`值，是的话就返回遍历；否则抛出`ConcurrentModificationException`异常，终止遍历。
+
+**注意**：这里异常的抛出条件是检测到 `modCount！=expectedmodCount `这个条件。如果集合发生变化时修改`modCount`值刚好又设置为了`expectedmodCount`值，则异常不会抛出。因此，不能依赖于这个异常是否抛出而进行并发操作的编程，这个异常只建议用于检测并发修改的bug。
+
+**场景**：`java.util`包下的集合类都是快速失败的，不能在多线程下发生并发修改（迭代过程中被修改）。
+
+#### fail-safe
+
+**现象**：采用失败安全机制的集合容器，在遍历时不是直接在集合内容上访问的，而是先复制原有集合内容，在拷贝的集合上进行遍历。
+
+**原理**：由于迭代时是对原集合的拷贝进行遍历，所以在遍历过程中对原集合所作的修改并不能被迭代器检测到，所以不会触发`ConcurrentModificationException`。
+
+**缺点**：基于拷贝内容的优点是避免了`ConcurrentModificationException`，但同样地，迭代器并不能访问到修改后的内容，即：迭代器遍历的是开始遍历那一刻拿到的集合拷贝，在遍历期间原集合发生的修改迭代器是不知道的。这也就是他的缺点，同时，由于是需要拷贝的，所以比较吃内存。
+
+**场景**：`java.util.concurrent`包下的容器都是安全失败，可以在多线程下并发使用，并发修改。
+
+比如`ConcurrentHashMap`以及`CopyOnWriteArrayList`
 
 [collection框架概览](https://www.cnblogs.com/bingyimeiling/p/10255037.html)
 
@@ -913,7 +1109,7 @@ static class Node<K,V> implements Map.Entry<K,V> {
 
 ##### Java7版本
 
-头插法，不能保证原有的顺序，会导致在多线程环境下形成一个环形链表，从而造成死锁
+头插法，不能保证原有的顺序，会导致在多线程环境下形成一个环形链表，从而造成死循环
 
 单向链表数组
 
@@ -1318,7 +1514,7 @@ private transient Entry<K,V> root;//根节点
 private transient int size = 0;//树中包含节点数目
 ```
 
-#### LinkedHashMap
+### LinkedHashMap
 
 可以参考leetcode中LRU算法实现
 
@@ -1331,6 +1527,230 @@ final boolean accessOrder;//迭代顺序
 ```
 
 ![image-20200826113624267](readme.assets/image-20200826113624267.png)
+
+### ConcurrentHashMap
+
+[ConcurrentHashMap & Hashtable](https://mp.weixin.qq.com/s/AixdbEiXf3KfE724kg2YIw)
+
+#### synchronizedMap
+
+```java
+Collections.synchronizedMap()
+```
+
+![aeseaklsejl](readme.assets/123.jpg)
+
+通过锁临界对象 mutex来达到并发控制的目的
+
+![img](readme.assets/64ee.jpg)
+
+#### Hashtable
+
+直接锁整个对象
+
+![img](readme.assets/eae.jpg)
+
+**Hashtable 是不允许键或值为 null 的，HashMap 的键值则都可以为 null**。主要原因是 fail-safe机制。这种机制会使你此次读到的数据不一定是最新的数据。
+
+如果你使用null值，就会使得其无法判断对应的key是不存在还是为空，因为你无法再调用一次contain(key）来对key是否存在进行判断，ConcurrentHashMap同理
+
+#### 1.7
+
+分段锁机制：Segment 
+
+```java
+static final class Segment<K,V> extends ReentrantLock implements Serializable {
+
+    private static final long serialVersionUID = 2249069246763182397L;
+
+    // 和 HashMap 中的 HashEntry 作用一样，真正存放数据的桶
+    transient volatile HashEntry<K,V>[] table;
+
+    transient int count;
+        // 快速失败（fail—fast）
+    transient int modCount;
+        // 大小
+    transient int threshold;
+        // 负载因子
+    final float loadFactor;
+
+}
+```
+
+理论上 ConcurrentHashMap 支持 CurrencyLevel (Segment 数组数量)的线程并发。
+
+每当一个线程占用锁访问一个 Segment 时，不会影响到其他的 Segment。
+
+就是说如果容量大小是16他的并发度就是16，可以同时允许16个线程操作16个Segment而且还是线程安全的。
+
+```java
+public V put(K key, V value) {
+    Segment<K,V> s;
+    if (value == null)
+        throw new NullPointerException();//这就是为啥他不可以put null值的原因
+    int hash = hash(key);
+    int j = (hash >>> segmentShift) & segmentMask;
+    if ((s = (Segment<K,V>)UNSAFE.getObject          
+         (segments, (j << SSHIFT) + SBASE)) == null) 
+        s = ensureSegment(j);
+    //先定位到Segment再put
+    return s.put(key, hash, value, false);
+}
+```
+
+```java
+     final V put(K key, int hash, V value, boolean onlyIfAbsent) {
+          // 将当前 Segment 中的 table 通过 key 的 hashcode 定位到 HashEntry
+            HashEntry<K,V> node = tryLock() ? null :
+                scanAndLockForPut(key, hash, value);// tryLock 获取锁 scanAndLockForPut自旋，获取锁超过重试次数改为阻塞锁获取。
+            V oldValue;
+            try {
+                HashEntry<K,V>[] tab = table;
+                int index = (tab.length - 1) & hash;
+                HashEntry<K,V> first = entryAt(tab, index);
+                for (HashEntry<K,V> e = first;;) {
+                    if (e != null) {
+                        K k;
+ // 遍历该 HashEntry，如果不为空则判断传入的 key 和当前遍历的 key 是否相等，相等则覆盖旧的 value。
+                        if ((k = e.key) == key ||
+                            (e.hash == hash && key.equals(k))) {
+                            oldValue = e.value;
+                            if (!onlyIfAbsent) {
+                                e.value = value;
+                                ++modCount;
+                            }
+                            break;
+                        }
+                        e = e.next;
+                    }
+                    else {
+                 // 不为空则需要新建一个 HashEntry 并加入到 Segment 中，同时会先判断是否需要扩容。
+                        if (node != null)
+                            node.setNext(first);
+                        else
+                            node = new HashEntry<K,V>(hash, key, value, first);
+                        int c = count + 1;
+                        if (c > threshold && tab.length < MAXIMUM_CAPACITY)
+                            rehash(node);
+                        else
+                            setEntryAt(tab, index, node);
+                        ++modCount;
+                        count = c;
+                        oldValue = null;
+                        break;
+                    }
+                }
+            } finally {
+               //释放锁
+                unlock();
+            }
+            return oldValue;
+        }
+```
+
+get 逻辑比较简单，只需要将 Key 通过 Hash 之后定位到具体的 Segment ，再通过一次 Hash 定位到具体的元素上。
+
+由于 HashEntry 中的 value 属性是用 volatile 关键词修饰的，保证了内存可见性，所以每次获取时都是最新值。
+
+ConcurrentHashMap 的 get 方法是非常高效的，**因为整个过程都不需要加锁**。
+
+#### 1.8
+
+采用了 `CAS + synchronized` 来保证并发安全性。
+
+```java
+//链表结构的Node节点
+static class Node<K,V> implements Map.Entry<K,V> {
+    final int hash;
+    final K key;
+    volatile V val;//值
+    volatile Node<K,V> next;//next 都用volatile修饰保证可见性
+}
+//转换为红黑树的树结点
+static final class TreeNode<K,V> extends Node<K,V> {
+        TreeNode<K,V> parent;  // red-black tree links
+        TreeNode<K,V> left;
+        TreeNode<K,V> right;
+        TreeNode<K,V> prev;    // needed to unlink next upon deletion
+        boolean red;
+}
+```
+
+put操作
+
+1. 根据 key 计算出 hashcode 。
+2. 判断是否需要进行初始化。
+3. 即为当前 key 定位出的 Node，如果为空表示当前位置可以写入数据，利用 CAS 尝试写入，失败则自旋保证成功。
+4. 如果当前位置的 `hashcode == MOVED == -1`,则需要进行扩容。
+5. 如果都不满足，则利用 synchronized 锁写入数据。
+6. 如果数量大于 `TREEIFY_THRESHOLD` 则要转换为红黑树。
+
+```java
+/** Implementation for put and putIfAbsent */
+final V putVal(K key, V value, boolean onlyIfAbsent) {
+    if (key == null || value == null) throw new NullPointerException();
+    int hash = spread(key.hashCode());//计算hash值，根据key
+    int binCount = 0;
+    for (Node<K,V>[] tab = table;;) {
+        Node<K,V> f; int n, i, fh;
+        if (tab == null || (n = tab.length) == 0)
+            tab = initTable();//初始化table
+        else if ((f = tabAt(tab, i = (n - 1) & hash)) == null) {//如果为null表示当前位置可以写入数据CAS写入
+            if (casTabAt(tab, i, null,
+                         new Node<K,V>(hash, key, value, null)))
+                break;                   // no lock when adding to empty bin 其中 casTabAt自旋写入数据
+        }
+        else if ((fh = f.hash) == MOVED)
+            tab = helpTransfer(tab, f);
+        else {
+            V oldVal = null;
+            synchronized (f) {//如果都不满足，利用sync写入数据
+                if (tabAt(tab, i) == f) {
+                    if (fh >= 0) {
+                        binCount = 1;
+                        for (Node<K,V> e = f;; ++binCount) {
+                            K ek;
+                            if (e.hash == hash &&
+                                ((ek = e.key) == key ||
+                                 (ek != null && key.equals(ek)))) {
+                                oldVal = e.val;
+                                if (!onlyIfAbsent)
+                                    e.val = value;
+                                break;
+                            }
+                            Node<K,V> pred = e;
+                            if ((e = e.next) == null) {
+                                pred.next = new Node<K,V>(hash, key,
+                                                          value, null);
+                                break;
+                            }
+                        }
+                    }
+                    else if (f instanceof TreeBin) {
+                        Node<K,V> p;
+                        binCount = 2;
+                        if ((p = ((TreeBin<K,V>)f).putTreeVal(hash, key,
+                                                       value)) != null) {
+                            oldVal = p.val;
+                            if (!onlyIfAbsent)
+                                p.val = value;
+                        }
+                    }
+                }
+            }
+            if (binCount != 0) {
+                if (binCount >= TREEIFY_THRESHOLD)//如果大于阈值，转化为红黑树
+                    treeifyBin(tab, i);
+                if (oldVal != null)
+                    return oldVal;
+                break;
+            }
+        }
+    }
+    addCount(1L, binCount);
+    return null;
+}
+```
 
 ## Lambda底层实现
 

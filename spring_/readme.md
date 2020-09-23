@@ -24,7 +24,11 @@ XML 方式通过配置 bean 标签中的 init-Method 和 destory-Method 指定�
 
 注解方式通过 @PreConstruct 和 @PostConstruct 注解指定自定义初始化和销毁方法
 
+[Spring Bean的生命周期](https://www.cnblogs.com/zrtqsk/p/3735273.html)
 
+![img](readme.assets/181453414212066.png)
+
+![img](readme.assets/181454040628981.png)
 
 ### Bean的创建
 

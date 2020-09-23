@@ -1,6 +1,7 @@
 package collection;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * @Auther: 徐少伟
@@ -18,6 +19,7 @@ public class MyCollection {
         new TreeMap<>();
         new LinkedHashMap<>();
         new PriorityQueue<>();
+        new ConcurrentHashMap<>();
 
         HashMap<Integer, Integer> map = new HashMap<>();
         for (int i = 0; i < 16; i++) {

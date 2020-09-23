@@ -94,10 +94,15 @@ public enum State {
 #### 线程池任务调度
 
 1. 首先检测线程池运行状态，如果不是RUNNING，则直接拒绝，线程池要保证在RUNNING的状态下执行任务。
-2. 如果workerCount < corePoolSize，则创建并启动一个线程来执行新提交的任务。
-3. 如果workerCount >= corePoolSize，且线程池内的阻塞队列未满，则将任务添加到该阻塞队列中。
-4. 如果workerCount >= corePoolSize && workerCount < maximumPoolSize，且线程池内的阻塞队列已满，则创建并启动一个线程来执行新提交的任务。
+2. 如果workerCount < corePoolSize，则创建并启动一个线程来执行新提交的任务。（创建线程需要全局锁）
+3. 如果workerCount >= corePoolSize，且线程池内的阻塞队列未满，则将任务添加到该阻塞队列中。（不需要申请全局锁）
+4. 如果workerCount >= corePoolSize && workerCount < maximumPoolSize，且线程池内的阻塞队列已满，则创建并启动一个线程来执行新提交的任务。（创建线程需要全局锁）
 5. 如果workerCount >= maximumPoolSize，并且线程池内的阻塞队列已满, 则根据拒绝策略来处理该任务, 默认的处理方式是直接抛异常。
+
+为什么先放入阻塞队列：
+
+- 线程池创建线程需要获取mainlock这个全局锁，会影响并发效率，所以使用阻塞队列把第一步创建核心线程与第三步创建最大线程隔离开来，起一个缓冲的作用。
+- 引入阻塞队列，是为了在执行execute()方法时，尽可能的避免获取全局锁。
 
 ```java
 //线程池任务调度相关源码：ThreadPoolExecutor
@@ -183,6 +188,78 @@ private final class Worker
             runWorker(this);//传入this即自己
         }
     }
+
+
+
+//addworker这里需要加mainLock，以维护wrokers工作队列的正常
+    private boolean addWorker(Runnable firstTask, boolean core) {
+        retry:
+        for (;;) {
+            int c = ctl.get();
+            int rs = runStateOf(c);
+
+            // Check if queue empty only if necessary.
+            if (rs >= SHUTDOWN &&
+                ! (rs == SHUTDOWN &&
+                   firstTask == null &&
+                   ! workQueue.isEmpty()))
+                return false;
+
+            for (;;) {
+                int wc = workerCountOf(c);
+                if (wc >= CAPACITY ||
+                    wc >= (core ? corePoolSize : maximumPoolSize))
+                    return false;
+                if (compareAndIncrementWorkerCount(c))
+                    break retry;
+                c = ctl.get();  // Re-read ctl
+                if (runStateOf(c) != rs)
+                    continue retry;
+                // else CAS failed due to workerCount change; retry inner loop
+            }
+        }
+
+        boolean workerStarted = false;
+        boolean workerAdded = false;
+        Worker w = null;
+        try {
+            w = new Worker(firstTask);
+            final Thread t = w.thread;
+            if (t != null) {
+                final ReentrantLock mainLock = this.mainLock;//加mainLock来防止workers并发问题
+                mainLock.lock();
+                try {
+                    // Recheck while holding lock.
+                    // Back out on ThreadFactory failure or if
+                    // shut down before lock acquired.
+                    int rs = runStateOf(ctl.get());
+
+                    if (rs < SHUTDOWN ||
+                        (rs == SHUTDOWN && firstTask == null)) {
+                        if (t.isAlive()) // precheck that t is startable
+                            throw new IllegalThreadStateException();
+                        workers.add(w);
+                        int s = workers.size();
+                        if (s > largestPoolSize)
+                            largestPoolSize = s;
+                        workerAdded = true;
+                    }
+                } finally {
+                    mainLock.unlock();
+                }
+                if (workerAdded) {
+                    t.start();
+                    workerStarted = true;
+                }
+            }
+        } finally {
+            if (! workerStarted)
+                addWorkerFailed(w);
+        }
+        return workerStarted;
+    }
+
+
 //Main worker run loop.此处注释解释了很多问题，建议详细看一看
 final void runWorker(Worker w) {
         Thread wt = Thread.currentThread();
@@ -256,6 +333,24 @@ Before running any task, the lock is acquired to prevent other pool interrupts w
 “这里在执行具体任务期间加锁，是为了避免在任务运行期间，其他线程调用了shutdown后正在执行的任务被中断。
 
 shutdown只会中断当前被阻塞挂起的线程”		——《Java并发编程之美》
+
+### 线程池超时关闭
+
+```java
+//通过设置值 allowCoreThreadTimeOut 来开始核心线程池关闭
+//默认为false
+public void allowCoreThreadTimeOut(boolean value) {
+    if (value && keepAliveTime <= 0)
+        throw new IllegalArgumentException("Core threads must have nonzero keep alive times");
+    if (value != allowCoreThreadTimeOut) {
+        allowCoreThreadTimeOut = value;
+        if (value)
+            interruptIdleWorkers();
+    }
+}
+```
+
+针对max线程池来说，空闲时间超过keepAlivedTime就会关闭
 
 ## Runnable 和 Callable
 
@@ -1637,5 +1732,164 @@ numbers.parallelStream().forEach(out::println);  　　
 >
 >指令重排序
 
+- 保证了不同线程对这个变量进行操作时的可见性，即一个线程修改了某个变量的值，这新值对其他线程来说是立即可见的。（实现**可见性**）
+- 禁止进行指令重排序。（实现**有序性**）
+- volatile 只能保证对单次读/写的原子性。i++ 这种操作不能保证**原子性** 
+
+#### 内存屏障
+
+volatile写前插入StoreStore
+
+volatile写后插入StoreLoad
+
+volatile读前插入LoadLoad
+
+volatile读后插入LoadStore
+
+```java
+public class Singleton{
+    
+    private Singleton(){}
+    
+    private static volatile Singleton singleton = null;
+    
+    public static Singleton getInstance(){
+       if(singleton == null){
+           synchronized(Singleton.class){
+               if(singleton == null){
+                   singleton = new Singleton();
+                   //这里会发生指令重排序
+                   //1 创建空间 2 初始化 3 返回引用
+                   //其中 初始化和返回引用可能重排序，因为两者之间没有依赖
+                   //所以需要加入volatile来防止指令重排序
+               }
+           }
+       }
+       return singleton;
+    }
+}
+```
+
+#### 数据依赖性
+
+写后读 
+
+```java
+int a = 1;
+int b = a;
+```
+
+写后写
+
+```java
+int a = 1;
+a = 2;
+```
+
+读后写
+
+```java
+int a = b;
+b = 1;
+```
+
+对于多线程来说
+
+```java
+class ReorderExample{
+    int a = 0;
+    boolean flag = false;
+    public void writer(){
+        a= 1; //1
+        flag = true;//2
+    }
+    
+    public void reader(){
+        if(flag){//3
+            int i = a*a;//4
+        }
+    }
+}
+```
+
+线程A调用 writer操作 线程B调用 reader操作，因为1和2操作没有关联性，所以重排序后可能先执行2，这样就导致 i = 0了
+
+其中3 4 操作存在控制依赖关系，编译器和处理器会采用猜测执行来克服控制相关性对并行度的影响。将计算结果先保存在(ROB)重排序缓冲中，当结果为true再写入。
+
 ## Synchronized
 
+原子性，可重入性（计数器），不可中断性（不能被中断，与 Lock 的 tryLock不同）
+
+其中synchronized不能防止指令重排序，因为临界区内可以重排序
+
+优化：自旋、锁消除、锁粗化、轻量级锁、偏向锁。
+
+### 底层实现
+
+对象头，关联到monitor对象
+
+- 当我们进入一个人方法的时候，执行**monitorenter**，就会获取当前对象的一个所有权，这个时候monitor进入数为1，当前的这个线程就是这个monitor的owner。
+- 如果你已经是这个monitor的owner了，你再次进入，就会把进入数+1.
+- 同理，当他执行完**monitorexit**，对应的进入数就-1，直到为0，才可以被其他线程持有。
+
+**ACC_SYNCHRONIZED**
+
+同步方法的时候，一旦执行到这个方法，就会先判断是否有标志位，然后，ACC_SYNCHRONIZED会去隐式调用刚才的两个指令：monitorenter和monitorexit。依旧是minitor对象的争夺。
+
+monitor监视器：
+
+```c++
+ ObjectMonitor() {
+    _header       = NULL;
+    _count        = 0;
+    _waiters      = 0,
+    _recursions   = 0;  // 线程重入次数
+    _object       = NULL;  // 存储Monitor对象
+    _owner        = NULL;  // 持有当前线程的owner
+    _WaitSet      = NULL;  // wait状态的线程列表
+    _WaitSetLock  = 0 ;
+    _Responsible  = NULL ;
+    _succ         = NULL ;
+    _cxq          = NULL ;  // 单向列表
+    FreeNext      = NULL ;
+    _EntryList    = NULL ;  // 处于等待锁状态block状态的线程列表
+    _SpinFreq     = 0 ;
+    _SpinClock    = 0 ;
+    OwnerIsThread = 0 ;
+    _previous_owner_tid = 0;
+  }
+```
+
+### 锁升级
+
+不可逆
+
+无锁->偏向锁->轻量级锁->重量级锁 
+
+#### 偏向锁
+
+对象头 Mark Word + Klass pointer 锁争夺也就是对象头指向的Monitor对象的争夺，一旦有线程持有了这个对象，标志位修改为1，就进入偏向模式，同时会把这个线程的ID记录在对象的Mark Word中。
+
+#### 轻量级锁
+
+Mark Word 相关，如果这个对象是无锁的，jvm就会在当前线程的栈帧中建立一个叫锁记录（Lock Record）的空间，用来存储锁对象的Mark Word 拷贝，然后把Lock Record中的owner指向当前对象。
+
+JVM接下来会利用CAS尝试把对象原本的Mark Word 更新会Lock Record的指针，成功就说明加锁成功，改变锁标志位，执行相关同步操作。
+
+如果失败了，就会判断当前对象的Mark Word是否指向了当前线程的栈帧，是则表示当前的线程已经持有了这个对象的锁，否则说明被其他线程持有了，继续锁升级，修改锁的状态，之后等待的线程也阻塞。
+
+#### 自旋锁
+
+### Lock和sync区别
+
+- Lock是一个接口，而synchronized是Java中的关键字，synchronized是内置的语言实现；
+
+- synchronized在发生异常时，会自动释放线程占有的锁，因此不会导致死锁现象发生；而Lock在发生异常时，如果没有主动通过unLock()去释放锁，则很可能造成死锁现象，因此使用Lock时需要在finally块中释放锁；
+
+- Lock可以让等待锁的线程响应中断，而synchronized却不行，使用synchronized时，等待的线程会一直等待下去，不能够响应中断；
+
+- 通过Lock可以知道有没有成功获取锁，而synchronized却无法办到。
+
+- Lock可以提高多个线程进行读操作的效率。（可以通过readwritelock实现读写分离） 
+
+- 性能上来说，在资源竞争不激烈的情形下，Lock性能稍微比synchronized差点（编译程序通常会尽可能的进行优化synchronized）。但是当同步非常激烈的时候，synchronized的性能一下子能下降好几十倍。而ReentrantLock确还能维持常态。 

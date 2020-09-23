@@ -13,7 +13,7 @@ import java.util.Scanner;
 public class myTest {
 
     @Test
-    public void test(){
+    public void test() {
 
 //        String a = new String("abc");
 //        String b = new String("abc");
@@ -29,29 +29,39 @@ public class myTest {
 
     }
 
-    public int maxLength (int[] arr) {
+    public int maxLength(int[] arr) {
         // write code here
-        int left = 0; int right = 0;
+        int left = 0;
+        int right = 0;
         int max = 0;
         HashSet<Integer> set = new HashSet<>();
-        while(left<arr.length && right<arr.length){
+        while (left < arr.length && right < arr.length) {
             int t = arr[right];
-            if(set.contains(t)){
-                max = Math.max(right - left,max);
-                while(left<arr.length){
-                    if(arr[left]!= t){
+            if (set.contains(t)) {
+                max = Math.max(right - left, max);
+                while (left < arr.length) {
+                    if (arr[left] != t) {
                         set.remove(arr[left]);
-                        left+=1;
-                    }else{
-                        left+=1;
+                        left += 1;
+                    } else {
+                        left += 1;
                         break;
                     }
                 }
-            }else{
+            } else {
                 set.add(t);
             }
             right++;
         }
-        return Math.max(right-left +1 ,max);
+        return Math.max(right - left + 1, max);
     }
- }
+
+    @Test
+    public void test2() {
+        MyStack myStack = new MyStack();
+        myStack.push(1);
+        myStack.push(2);
+        myStack.push(3);
+        System.out.println(myStack.pop());
+    }
+}

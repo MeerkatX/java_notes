@@ -1,5 +1,23 @@
 # SpringBoot
 
+![](https://img.shields.io/badge/开箱即用-约定大于配置-blue.svg)
+
+## Spring Boot 自动装配
+
+> SpringBoot在启动的时候从类路径下的META-INF/spring.factories中获取EnableAutoConfiguration指定的值
+>
+> 将这些值作为自动配置类导入容器 ， 自动配置类就生效 ， 帮我们进行自动配置工作；
+>
+> 以前我们需要自己配置的东西 ， 自动配置类都帮我们解决了
+>
+> 整个J2EE的整体解决方案和自动配置都在springboot-autoconfigure的jar包中；
+>
+> **它将所有需要导入的组件以全类名的方式返回 ， 这些组件就会被添加到容器中 ；**
+>
+> 它会给容器中导入非常多的自动配置类 （xxxAutoConfiguration）, 就是给容器中导入这个场景需要的所有组件 ， 并配置好这些组件 ；
+>
+> **有了自动配置类 ， 免去了我们手动编写配置注入功能组件等的工作；**
+
 ## 自动配置
 
 包spring-boot-autoconfigure下的spring.factories

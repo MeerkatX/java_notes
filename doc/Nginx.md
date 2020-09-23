@@ -287,3 +287,25 @@ Server块：
     }
 ```
 
+## 负载均衡配置
+
+[负载均衡配置](https://juejin.im/post/6844903912277835789)
+
+```bash
+    #  首先，你要有两台或以上可以提供相同服务的Web服务器,不然这个负载均衡配置就没有意义！
+    #  在配置过程中只需要改代理服务器的配置就行，其他服务器不用管。
+    -    vim /usr/local/nginx/conf/nginx.conf
+        #   在http下添加如下代码
+            upstream item { # item名字可以自定义
+                server 192.168.101.60:81 参数;#权重weight = 1、max_fails失败多少次踢出队列、fail_timeout 踢出队列后重新探测时间、max_conns 最大连接数
+                server 192.168.101.77:80 参数;
+                # 负载均衡模式(非必选项） 有ip_hash哈希分配、least_conn最少连接分配
+            }
+        #   在server 80下添加如下代码
+            location /{
+                proxy_pass http://item;     # item是在上面命名的
+            }
+    -   配置 'upstream' 的时候,可以把你的代理服务器也加在里面用来做 'web' 服务器, 但是端口就不用在用80了。
+    -   重启你的nginx组件，现在负载均衡就已经可以用了
+```
+
