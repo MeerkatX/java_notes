@@ -6,8 +6,8 @@ import java.util.List;
 /**
  * @Auther: 徐少伟
  * @Date: 2020/4/22
- * @Description:
- *
+ * @Description: 18. 四数之和
+ * https://leetcode-cn.com/problems/4sum/
  *
  */
 public class FourSum {

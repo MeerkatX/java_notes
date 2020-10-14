@@ -7,10 +7,10 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
 @MapperScan("com.nuc.meerkatx.springbootstudy.mapper")
-public class SpringbootstudyApplication {
+public class SpringBootStudyApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(SpringbootstudyApplication.class, args);
+        SpringApplication.run(SpringBootStudyApplication.class, args);
     }
 
 }
