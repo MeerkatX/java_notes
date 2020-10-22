@@ -970,10 +970,6 @@ public class ReentrantLock implements Lock, java.io.Serializable {
 
 ```
 
-
-
-
-
 ### Condition
 
 类似 wait 和 notify方法，常与锁搭配使用 比如上面的 `Condition newCondition();`

@@ -830,9 +830,25 @@ G1 各代的存储地址不是连续的，每一代都使用了 n 个不连续�
 
 #### ArrayList
 
+```java
+public class ArrayList<E> extends AbstractList<E>
+        implements List<E>, RandomAccess, Cloneable, java.io.Serializable
+
+// RandomAccess  标记为支持随机访问与LinkedList不同点
+    // Marker interface 
+    // they support fast (generally constant time) random access
+    
+// Serializable 可序列化 注意elementData被transient修饰，通过自己定义的方法序列化。
+```
+
 数组实现，随机访问效率高O(1)，读快写慢（写可能涉及元素移动）
 
 ```java
+/**
+* Default initial capacity.
+*/
+private static final int DEFAULT_CAPACITY = 10;//默认大小为10，属于经验值，没有具体为啥
+
 private transient Object[] elementData;//数据域
 
 private int size;//当前list长度 elementData的length必然大于等于size
@@ -846,7 +862,7 @@ private static final int MAX_ARRAY_SIZE=Integer.MAX_VALUE-8;//数组长度上限
 
 那么为什么不直接用`elementData`来序列化，而采用上面的方式来实现序列化呢？主要的原因是`elementData`是一个缓存数组，为了性能的考虑，它通常会预留一些容量，当容量不足时会扩充容量，因此，可能会有大量的空间没有实际存储元素。采用上面的方式来实现序列化可以保证只序列化实际有值的那些元素，而不序列化整个数组。（通过重写`writeObject`方法被序列化方法反射调用）
 
-默认创建长度为10 `public ArrayList()` 方法
+默认**创建长度为10** `public ArrayList()` 方法
 
 **容量修正**主要是两个方向：**多余和不足**。
 
@@ -915,6 +931,12 @@ if(modCount != expectedModCount) throw new ConcurrentModificationException();
 ```
 
 #### LinkedList
+
+```java
+public class LinkedList<E>
+    extends AbstractSequentialList<E>
+    implements List<E>, Deque<E>, Cloneable, java.io.Serializable
+```
 
 顺序访问、写块读慢
 
@@ -1235,7 +1257,11 @@ static final int hash(Object key) {
 }
 ```
 
-putVal
+##### putVal
+
+流程图
+
+![putVal方法执行流程图](readme.assets/20191214222552803.png)
 
 TREEIFY_THRESHOLD固定为8的原因 $O(log_2N)$ 和 $O(N)$ 之间当数值较小时，查找效率差别不大，Java8决定7为阈值。
 

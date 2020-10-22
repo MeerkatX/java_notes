@@ -13,6 +13,7 @@ public class MyCollection {
         LinkedList<Integer> in = new LinkedList<>();
 
         new ArrayList<>();
+        new LinkedList<>();
         new HashMap<>();
         new HashSet<>();
         new TreeSet<>();
@@ -20,6 +21,9 @@ public class MyCollection {
         new LinkedHashMap<>();
         new PriorityQueue<>();
         new ConcurrentHashMap<>();
+        new Hashtable<>();
+
+        Collections.synchronizedMap(new HashMap<>());
 
         HashMap<Integer, Integer> map = new HashMap<>();
         for (int i = 0; i < 16; i++) {

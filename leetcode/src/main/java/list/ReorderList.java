@@ -6,11 +6,10 @@ import java.util.PriorityQueue;
 /**
  * @Auther: 徐少伟
  * @Date: 2020/5/24
- * @Description:
+ * @Description: 143. 重排链表
+ * https://leetcode-cn.com/problems/reorder-list/
  */
 public class ReorderList {
-    PriorityQueue<Integer> pq = new PriorityQueue<>();
-
 
     private HashMap<Integer, ListNode> map = new HashMap<>();
 
